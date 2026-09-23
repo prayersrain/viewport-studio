@@ -22,8 +22,7 @@ const rulesFor=tabId=>rules.filter(r=>r.condition.tabIds.includes(tabId));
 test('icon turns the same tab into Studio: no new tab, window or debugger',async()=>{
   await chrome.action.onClicked.listener({id:1,url:'http://localhost:5173/booking'});
   assert.deepEqual(calls.at(-1),['update',1,{url:STUDIO+'?url='+encodeURIComponent('http://localhost:5173/booking')}]);
-  assert.equal(storage.sessions[1].url,'http://localhost:5173/booking');
-  assert.deepEqual(storage.sessions[1].size,{width:393,height:852});
+  assert.deepEqual(storage.sessions[1],{url:'http://localhost:5173/booking'});
 });
 
 test('only the Studio page may open a session, and only after host access is granted',async()=>{
@@ -39,7 +38,7 @@ test('only the Studio page may open a session, and only after host access is gra
   assert.equal(opened.ok,true);
   assert.equal(opened.value.url,'http://localhost:5173/booking','tracked URL wins over the query string');
   assert.equal(registered.length,1);
-  assert.deepEqual(registered[0].matches,['http://*/*','https://*/*']);
+  assert.deepEqual(registered[0].matches,['http://*/*','https://*/*'],'frame script stays off file:// and other schemes');
   assert.equal(registered[0].allFrames,true);assert.equal(registered[0].runAt,'document_start');
   assert.equal(rulesFor(1).length,2);
   await send('open');
@@ -47,19 +46,14 @@ test('only the Studio page may open a session, and only after host access is gra
   assert.equal(registered.length,1,'frame script registers once');
 });
 
-test('frame reports track the page inside Studio; top frames and bad URLs are ignored',async()=>{
-  const report=(url,frameId=5,tabId=1)=>chrome.runtime.onMessage.listener({type:'frame-url',url},{id:'test',url,frameId,tab:{id:tabId}},()=>assert.fail('frame reports get no reply'));
-  report('http://localhost:5173/booking/step-2');await settle();
+test('Studio tracks the focused page; content scripts and bad URLs cannot',async()=>{
+  assert.equal((await send('track',{url:'http://localhost:5173/booking/step-2'})).ok,true);
   assert.equal(storage.sessions[1].url,'http://localhost:5173/booking/step-2');
-  report('http://localhost:5173/top-frame',0);report('javascript:alert(1)');report('https://other.example/',5,99);await settle();
+  // A page inside a device frame is not the Studio page, even in the same tab.
+  const fromFrame=await send('track',{url:'https://evil.example/'},{id:'test',url:'https://evil.example/',frameId:5,tab:{id:1}});
+  assert.equal(fromFrame.ok,false);
+  assert.equal((await send('track',{url:'javascript:alert(1)'})).ok,false);
   assert.equal(storage.sessions[1].url,'http://localhost:5173/booking/step-2');
-  assert.equal(storage.sessions[99],undefined);
-});
-
-test('size is validated and persisted',async()=>{
-  assert.equal((await send('size',{size:{width:852,height:393}})).ok,true);
-  assert.deepEqual(storage.sessions[1].size,{width:852,height:393});
-  assert.equal((await send('size',{size:{width:99999,height:393}})).ok,false);
   assert.equal((await send('Runtime.evaluate',{expression:'1'})).ok,false);
 });
 

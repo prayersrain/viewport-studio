@@ -1,21 +1,17 @@
-import { PRESETS, ACCESS, viewport, webUrl } from './core.js';
+import { PRESETS, MAX_DEVICES, MAX_CANVAS, ACCESS, viewport, webUrl, presetFor, deviceBox, fitScale, stepZoom, cropRect, strips, cleanPrefs, cleanSaved } from './core.js';
 import { t, localize } from './i18n.js';
 import { observePreviewWidth } from './layout.js';
 const $ = selector => document.querySelector(selector);
-let size = { ...PRESETS.iphone }, device = 'iphone', zoom = 100, frame = true, ready = false, current = '', tabId;
-const site = $('#live-screen'), params = new URLSearchParams(location.search);
+const GAP = 28; // screen px between devices; must match .phone-space gap
+const GROUPS = { phone: 'groupPhone', tablet: 'groupTablet', desktop: 'groupDesktop', saved: 'groupSaved' };
+const params = new URLSearchParams(location.search);
+// Device layout lives in storage.local (survives restarts); the page URL lives in the background session.
+const state = { focus: 0, frame: true, sync: true, zoom: 'fit', shot: 'screen' };
+let slots = [], saved = [], ready = false, tabId, scale = 1, siteUrl = '', capturing = false, cutShort = false, slotCount = 0;
+
 localize();
 if (globalThis.chrome?.i18n) document.documentElement.lang = t('lang');
 $('#version-note').textContent = t('versionNote', globalThis.chrome?.runtime?.getManifest?.().version || 'dev');
-for (const [id, preset] of Object.entries(PRESETS)) {
-  const button = document.createElement('button');
-  button.className = 'device'; button.dataset.device = id;
-  button.innerHTML = '<span class="device-icon"></span><span><b></b><small></small></span>';
-  button.querySelector('b').textContent = preset.name;
-  button.querySelector('small').textContent = `${preset.width} × ${preset.height} · ${t('portrait')}`;
-  button.onclick = () => resize(preset, id);
-  $('#devices').append(button);
-}
 async function send(type, data = {}) {
   if (!globalThis.chrome?.runtime?.sendMessage) throw Error(t('errorNotExtension'));
   const result = await chrome.runtime.sendMessage({ type, ...data });
@@ -24,73 +20,382 @@ async function send(type, data = {}) {
 }
 function status(message, error = false) { $('#status').textContent = message; $('#status').classList.toggle('status-error', error); }
 function error(e) { status(e.message, true); }
-function overlay(message) { $('#connection-overlay').hidden = !message; $('#connection-overlay').textContent = message || ''; }
-function geometry() {
-  const landscape = size.width > size.height, space = $('.phone-space'), phone = $('#phone');
-  const w = size.width + (frame ? (landscape ? 98 : 22) : 0), h = size.height + (frame ? (landscape ? 22 : 98) : 0);
-  const scale = Math.min(.62, Math.max(120,space.clientWidth-36) / Math.max(landscape?1030:452,w)) * zoom / 100;
-  phone.style.width = w+'px'; phone.style.height = h+'px';
-  phone.style.transform = `translateX(-50%) scale(${scale})`;
-  space.style.height = Math.max(450,h*scale+48)+'px';
-  phone.classList.toggle('landscape',landscape); phone.classList.toggle('plain',!frame);
-  phone.classList.toggle('android',device==='android'); phone.classList.toggle('custom-device',device==='custom');
-  $('#device-title').textContent = PRESETS[device]?.name || t('customViewport');
-  $('#device-subtitle').textContent = `${size.width} × ${size.height} CSS px · ${t(landscape?'landscape':'portrait')}`;
-  $('#width').value = size.width; $('#height').value = size.height;
-  $('#zoom').textContent = zoom+'%';
-  $('#canvas-caption').textContent = t(frame?'frameOn':'contentOnly');
+const focused = () => slots[state.focus];
+const describe = key => PRESETS[key] || saved.find(device => device.id === key) || { name: t('customViewport') };
+const frameOf = slot => describe(slot.key).frame || 'generic';
+// A saved device keeps its name when its size is typed in again.
+const keyFor = size => presetFor(size) !== 'custom' ? presetFor(size) : saved.find(d => (d.width === size.width && d.height === size.height) || (d.width === size.height && d.height === size.width))?.id || 'custom';
+function storePrefs() {
+  const prefs = { devices: slots.map(({ key, size, linked }) => ({ key, ...size, linked })), focus: state.focus, frame: state.frame, sync: state.sync, zoom: state.zoom, shot: state.shot };
+  globalThis.chrome?.storage?.local.set({ prefs }).catch(() => {});
 }
-function markDevice() {
-  document.querySelectorAll('.device').forEach(b=>{const chosen=b.dataset.device===device;b.classList.toggle('selected',chosen);b.setAttribute('aria-pressed',String(chosen));b.querySelector('.dot')?.remove();if(chosen){const dot=document.createElement('span');dot.className='dot';b.append(dot)}});
+
+// ---- Devices on the stage ----
+function createSlot({ key, width, height, linked = true }) {
+  const element = $('#slot-template').content.firstElementChild.cloneNode(true);
+  localize(element);
+  const slot = { id: `viewport-${Date.now().toString(36)}-${slotCount++}`, key, size: viewport({ width, height }), element,
+    body: element.querySelector('.slot-body'), phone: element.querySelector('.phone'), iframe: element.querySelector('iframe'),
+    overlay: element.querySelector('.connection-overlay'), host: element.querySelector('.site-host'), url: '', following: false, frameId: null, port: null, linked };
+  // frame.js reads this name to tell Studio which device it belongs to.
+  slot.iframe.name = slot.id;
+  slot.iframe.addEventListener('load', () => { if (slot.url) loaded(slot); });
+  // Clicking into a device (its frame gets focus) makes it the one the inspector edits.
+  slot.iframe.addEventListener('focus', () => focusSlot(slot));
+  element.addEventListener('pointerdown', () => focusSlot(slot));
+  element.querySelector('.slot-close').onclick = event => { event.stopPropagation(); removeSlot(slot); };
+  // An unlinked device keeps its own page and scroll position.
+  element.querySelector('.slot-link').onclick = () => { slot.linked = !slot.linked; geometry(); storePrefs(); syncFrames(); };
+  return slot;
 }
-const presetFor = s => Object.keys(PRESETS).find(key=>(PRESETS[key].width===s.width&&PRESETS[key].height===s.height)||(PRESETS[key].width===s.height&&PRESETS[key].height===s.width))||'custom';
-function urlLabel(url) {
-  if (document.activeElement !== $('.address input')) $('.address input').value=url;
-  try { $('#site-host').textContent=new URL(url).host; } catch { /* initial empty url */ }
+function focusSlot(slot) {
+  const index = slots.indexOf(slot);
+  if (index < 0 || index === state.focus) return;
+  state.focus = index; geometry(); storePrefs();
+  if (slot.url) { urlLabel(slot.url); send('track', { url: slot.url }).catch(() => {}); }
 }
-function load(url) { current=url; urlLabel(url); overlay(t('loading')); site.src=url; }
-// Clear the loading state as soon as the page commits (frame.js reports) or finishes loading.
-function loaded() { overlay(''); if(ready) status(t('statusReady')); }
-site.addEventListener('load',()=>{ if(current) loaded(); });
-globalThis.chrome?.runtime?.onMessage?.addListener((message,sender)=>{
-  if(message?.type!=='frame-url'||sender.tab?.id!==tabId||!sender.frameId)return;
-  current=message.url; urlLabel(current); loaded();
-});
-// The iframe is a real viewport: resizing and rotating are instant, no reload or stream restart.
-function resize(next,nextDevice=device) {
-  try { size=viewport(next); } catch(e) { geometry(); error(e); return; }
-  device=nextDevice; geometry(); markDevice();
-  if (ready) send('size',{size}).catch(error);
+function addSlot(device) {
+  if (slots.length >= MAX_DEVICES) return status(t('maxDevices'), true);
+  const url = focused()?.url || siteUrl, slot = createSlot(device);
+  slots.push(slot); $('#stage').append(slot.element);
+  state.focus = slots.length - 1; geometry(); storePrefs(); syncFrames();
+  if (ready && url) loadSlot(slot, url);
+  else overlay(slot, $('#grant').hidden ? t('overlayEmpty') : t('overlayGrant'));
 }
-$('#rotate-btn').onclick=()=>resize({width:size.height,height:size.width});
-for(const id of ['width','height']) $('#'+id).onchange=()=>{const next={width:Number($('#width').value),height:Number($('#height').value)};resize(next,presetFor(next))};
-$('#custom').onclick=()=>{$('#width').focus();$('#width').select()};
-for(const [id,delta] of [['zoom-in',10],['zoom-out',-10]]) $('#'+id).onclick=()=>{zoom=Math.max(70,Math.min(110,zoom+delta));geometry()};
-$('#frame-segment').onclick=e=>{const b=e.target.closest('button');if(!b)return;frame=b.dataset.frame==='on';$('#frame-segment').querySelectorAll('button').forEach(x=>{x.classList.toggle('chosen',x===b);x.setAttribute('aria-pressed',String(x===b))});geometry()};
-function navigate() {
-  try { if(!ready)throw Error(t('errorGrantFirst')); load(webUrl($('.address input').value)); status(t('loading')); } catch(e){error(e)}
+function removeSlot(slot) {
+  if (slots.length < 2) return;
+  const keep = focused() === slot ? null : focused();
+  try { slot.port?.disconnect(); } catch { /* already gone */ }
+  slot.element.remove(); slots.splice(slots.indexOf(slot), 1);
+  state.focus = keep ? slots.indexOf(keep) : Math.min(state.focus, slots.length - 1);
+  geometry(); storePrefs(); syncFrames();
+  if (focused().url) urlLabel(focused().url);
 }
-$('#navigate').onclick=navigate;$('.address input').onkeydown=e=>{if(e.key==='Enter')navigate()};
-$('#reload').onclick=()=>{if(current)load(current)};
-$('#focus-target').onclick=()=>{if(current)chrome.tabs.create({url:current,openerTabId:tabId}).catch(error)};
-$('#end-session').onclick=()=>send('exit',{url:current}).catch(error);
-async function start() {
-  if(!globalThis.chrome?.tabs)throw Error(t('errorNotExtension'));
-  tabId=(await chrome.tabs.getCurrent()).id;
-  if(!await chrome.permissions.contains(ACCESS)) {
-    $('#grant').hidden=false; overlay(t('overlayGrant'));
-    status(t('statusGrant'));
-    return;
+function setDevice(key, device) {
+  const slot = focused(); slot.key = key; slot.size = viewport(device); geometry(); storePrefs();
+}
+function resizeFocused(next, key) {
+  try { next = viewport(next); } catch (e) { geometry(); return error(e); }
+  const slot = focused(); slot.size = next; slot.key = key ?? keyFor(next); geometry(); storePrefs();
+}
+
+// ---- Layout ----
+// Devices scale together; "fit" picks the largest scale that shows them all.
+function geometry(bounds) {
+  const stage = $('#stage'), multi = slots.length > 1;
+  stage.classList.toggle('multi', multi);
+  const framed = state.frame && !bounds?.plain;
+  const boxes = slots.map(slot => deviceBox(slot.size, frameOf(slot), framed));
+  if (bounds) scale = fitScale(bounds.only ? [boxes[slots.indexOf(bounds.only)]] : boxes, bounds.width, bounds.height, GAP);
+  else if (state.zoom === 'fit') {
+    const top = stage.getBoundingClientRect().top + scrollY;
+    scale = fitScale(boxes, stage.clientWidth - 32, Math.max(320, innerHeight - top - (multi ? 150 : 120)), GAP);
+  } else scale = state.zoom;
+  slots.forEach((slot, index) => {
+    const box = boxes[index], kind = frameOf(slot);
+    Object.assign(slot.body.style, { width: box.width * scale + 'px', height: box.height * scale + 'px' });
+    Object.assign(slot.phone.style, { width: box.width + 'px', height: box.height + 'px', transform: `scale(${scale})` });
+    slot.phone.classList.toggle('landscape', slot.size.width > slot.size.height);
+    slot.phone.classList.toggle('plain', !framed);
+    slot.phone.classList.toggle('android', kind === 'android');
+    slot.phone.classList.toggle('custom-device', kind === 'generic');
+    slot.phone.classList.toggle('screen-frame', kind === 'screen');
+    slot.element.classList.toggle('focused', index === state.focus);
+    slot.element.classList.toggle('unlinked', !slot.linked);
+    const link = slot.element.querySelector('.slot-link');
+    link.setAttribute('aria-pressed', String(slot.linked)); link.title = t(slot.linked ? 'linkOn' : 'linkOff'); link.setAttribute('aria-label', link.title);
+    slot.element.querySelector('.slot-name').textContent = `${describe(slot.key).name} · ${slot.size.width}×${slot.size.height}`;
+  });
+  const slot = focused(), landscape = slot.size.width > slot.size.height;
+  $('#device-title').textContent = describe(slot.key).name;
+  $('#device-subtitle').textContent = `${slot.size.width} × ${slot.size.height} CSS px · ${t(landscape?'landscape':'portrait')}`;
+  if (document.activeElement !== $('#width')) $('#width').value = slot.size.width;
+  if (document.activeElement !== $('#height')) $('#height').value = slot.size.height;
+  $('#zoom').textContent = (state.zoom === 'fit' ? t('zoomFit') + ' · ' : '') + Math.round(scale * 100) + '%';
+  $('#canvas-caption').textContent = t(state.frame?'frameOn':'contentOnly');
+  $('#save-device').hidden = slot.key !== 'custom';
+  $('#sync').disabled = !multi;
+  markDevices();
+}
+function markDevices() {
+  const keys = new Set(slots.map(slot => slot.key)), full = slots.length >= MAX_DEVICES;
+  for (const button of document.querySelectorAll('.device')) {
+    const chosen = button.dataset.key === focused()?.key;
+    button.classList.toggle('selected', chosen); button.classList.toggle('in-use', !chosen && keys.has(button.dataset.key));
+    button.setAttribute('aria-pressed', String(chosen));
   }
-  $('#grant').hidden=true;
-  const session=await send('open',{url:params.get('url')});
-  size=session.size; device=presetFor(size); geometry(); markDevice(); ready=true;
-  if(session.url) { load(session.url); status(t('statusReady')); }
-  else { overlay(t('overlayEmpty')); params.get('error') ? status(params.get('error'),true) : status(t('statusEmpty')); }
+  for (const button of document.querySelectorAll('.device-add:not(.device-delete)')) button.disabled = full;
 }
-$('#grant').onclick=async()=>{
-  try { if(!await chrome.permissions.request(ACCESS)) return status(t('errorDenied'),true); await start(); } catch(e){error(e)}
+function renderDevices() {
+  const list = $('#devices'), groups = {};
+  for (const [key, device] of Object.entries(PRESETS)) (groups[device.group] ||= []).push([key, device]);
+  groups.saved = saved.map(device => [device.id, device]);
+  list.replaceChildren();
+  for (const [group, entries] of Object.entries(groups)) {
+    if (!entries.length) continue;
+    const label = document.createElement('div');
+    label.className = 'eyebrow group-label'; label.textContent = t(GROUPS[group]);
+    list.append(label, ...entries.map(([key, device]) => deviceRow(key, device, group)));
+  }
+  markDevices();
+}
+function deviceRow(key, device, group) {
+  const row = document.createElement('div'), pick = document.createElement('button'), add = document.createElement('button');
+  row.className = 'device-row';
+  pick.className = 'device'; pick.dataset.key = key;
+  pick.innerHTML = '<span class="device-icon"></span><span><b></b><small></small></span>';
+  pick.querySelector('.device-icon').dataset.group = group;
+  pick.querySelector('b').textContent = device.name;
+  pick.querySelector('small').textContent = `${device.width} × ${device.height}`;
+  pick.onclick = () => setDevice(key, device);
+  add.className = 'device-add'; add.textContent = '＋'; add.title = t('addDevice'); add.setAttribute('aria-label', `${t('addDevice')}: ${device.name}`);
+  add.onclick = () => addSlot({ key, width: device.width, height: device.height });
+  row.append(pick, add);
+  if (group === 'saved') {
+    const remove = document.createElement('button');
+    remove.className = 'device-add device-delete'; remove.textContent = '×'; remove.title = t('deleteSaved'); remove.setAttribute('aria-label', `${t('deleteSaved')}: ${device.name}`);
+    remove.onclick = () => deleteSaved(key);
+    row.append(remove);
+  }
+  return row;
+}
+function saveDevice() {
+  const slot = focused(), name = $('#device-name').value.trim().slice(0, 40) || `${slot.size.width}×${slot.size.height}`;
+  const device = { id: 'saved-' + Date.now().toString(36), name, ...slot.size };
+  saved = cleanSaved([...saved, device]);
+  chrome.storage.local.set({ savedDevices: saved }).catch(error);
+  slot.key = device.id; $('#device-name').value = '';
+  renderDevices(); geometry(); storePrefs();
+}
+function deleteSaved(id) {
+  saved = saved.filter(device => device.id !== id);
+  chrome.storage.local.set({ savedDevices: saved }).catch(error);
+  for (const slot of slots) if (slot.key === id) slot.key = 'custom';
+  renderDevices(); geometry(); storePrefs();
+}
+
+// ---- Pages inside the devices ----
+function overlay(slot, message) { slot.overlay.hidden = !message; slot.overlay.textContent = message || ''; }
+function urlLabel(url) {
+  if (document.activeElement !== $('.address input')) $('.address input').value = url;
+}
+function loaded(slot) {
+  overlay(slot, '');
+  if (ready && slot === focused()) status(t('statusReady'));
+}
+// following: the next report from this device is the result of this load, not a user action to mirror.
+function loadSlot(slot, url, following = true) {
+  slot.url = url; slot.following = following;
+  try { slot.host.textContent = new URL(url).host; } catch { /* keep previous host */ }
+  if (slot === focused()) urlLabel(url);
+  overlay(slot, t('loading')); slot.iframe.src = url;
+}
+// The address bar drives the selected device and every device synced with it.
+function loadAll(url, everyone = false) {
+  siteUrl = url;
+  const origin = focused();
+  for (const slot of slots) if (everyone || slot === origin || (state.sync && origin.linked && slot.linked)) loadSlot(slot, url);
+  send('track', { url }).catch(() => {});
+}
+// A site that redirects differently per width could make devices chase each other forever.
+const recentSync = new Map();
+function recentlySynced(url) {
+  const now = Date.now();
+  for (const [seen, at] of recentSync) if (now - at > 3000) recentSync.delete(seen);
+  if (recentSync.has(url)) return true;
+  recentSync.set(url, now); return false;
+}
+function reported(slot, value) {
+  let url;
+  try { url = webUrl(value); } catch { return; }
+  const followed = slot.following;
+  slot.following = false; slot.url = url;
+  slot.host.textContent = new URL(url).host;
+  loaded(slot);
+  if (slot === focused()) { urlLabel(url); send('track', { url }).catch(() => {}); }
+  if (!shares(slot) || followed || recentlySynced(url)) return;
+  for (const other of slots) if (other !== slot && other.linked && other.url !== url) loadSlot(other, url);
+}
+const post = (slot, message) => { try { slot.port?.postMessage(message); } catch { slot.port = null; } };
+const shares = slot => state.sync && slot.linked && slots.filter(other => other.linked).length > 1;
+function syncFrames() { for (const slot of slots) post(slot, { type: 'sync', scroll: shares(slot) }); }
+// Request/reply over a device's port (measure and scroll the page for full-page screenshots).
+const pending = new Map();
+let asked = 0;
+function ask(slot, message, timeout = 4000) {
+  return new Promise((resolve, reject) => {
+    if (!slot.port) return reject(Error(t('errorFullPage')));
+    const id = ++asked, timer = setTimeout(() => { pending.delete(id); reject(Error(t('errorFullPage'))); }, timeout);
+    pending.set(id, reply => { clearTimeout(timer); resolve(reply); });
+    post(slot, { ...message, id });
+  });
+}
+globalThis.chrome?.runtime?.onConnect?.addListener(port => {
+  const sender = port.sender;
+  if (port.name !== 'viewport-frame' || sender?.tab?.id !== tabId || !sender.frameId) return port.disconnect();
+  let slot = null;
+  port.onMessage.addListener(message => {
+    // First report maps the frame to its device by iframe name; later documents by frameId.
+    slot ||= slots.find(s => s.frameId === sender.frameId) || slots.find(s => s.frameId === null && s.id === message.slot);
+    if (!slot || !slots.includes(slot)) return;
+    if (slot.port !== port) { slot.frameId = sender.frameId; slot.port = port; post(slot, { type: 'sync', scroll: shares(slot) }); }
+    if (message.type === 'url') reported(slot, message.url);
+    if (message.type === 'reply' && pending.has(message.id)) { pending.get(message.id)(message); pending.delete(message.id); }
+    if (message.type === 'scroll' && shares(slot) && typeof message.path === 'string' && message.path.length < 2000) {
+      const scroll = { type: 'scroll', path: message.path, x: Number(message.x) || 0, y: Number(message.y) || 0 };
+      for (const other of slots) if (other !== slot && other.linked) post(other, scroll);
+    }
+  });
+  port.onDisconnect.addListener(() => { if (slot?.port === port) slot.port = null; });
+});
+
+// ---- Screenshots ----
+// captureVisibleTab only sees the screen, so devices are briefly shown alone at the largest fitting size.
+const frames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const toBlob = canvas => new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(Error(t('errorCapture'))), 'image/png'));
+let lastGrab = 0;
+async function grab() {
+  // Chrome allows about two captureVisibleTab calls per second.
+  await pause(Math.max(0, lastGrab + 550 - Date.now()));
+  lastGrab = Date.now();
+  // captureVisibleTab takes whatever tab is in front; switching tabs mid-capture must not leak another page.
+  const self = await chrome.tabs.get(tabId);
+  if (!self.active) throw Error(t('errorCaptureHidden'));
+  const image = new Image();
+  image.src = await chrome.tabs.captureVisibleTab(self.windowId, { format: 'png' });
+  await image.decode();
+  return image;
+}
+async function captureScreen() {
+  geometry({ width: innerWidth - 48, height: innerHeight - 48 });
+  await frames(); await pause(80);
+  const image = await grab();
+  // Include the bezel's outer ring and side buttons.
+  const pad = state.frame ? 8 * scale : 0;
+  const rects = slots.map(slot => { const r = slot.phone.getBoundingClientRect(); return { left: r.left - pad, top: r.top - pad, right: r.right + pad, bottom: r.bottom + pad }; });
+  const crop = cropRect(rects, image.width / innerWidth, image.width, image.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = crop.width; canvas.height = crop.height;
+  canvas.getContext('2d').drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  return toBlob(canvas);
+}
+// Full page: the selected device, without its frame, one screen at a time while the page scrolls underneath.
+async function captureFull(slot) {
+  if (!slot.port) throw Error(t('errorFullPage'));
+  for (const other of slots) other.element.classList.toggle('capture-hidden', other !== slot);
+  geometry({ width: innerWidth - 48, height: innerHeight - 48, only: slot, plain: true });
+  await frames();
+  try {
+    const { height, scrollHeight } = await ask(slot, { type: 'measure' });
+    const total = Math.min(scrollHeight, Math.floor(MAX_CANVAS / (scale * devicePixelRatio)));
+    cutShort = scrollHeight > total;
+    let canvas, context, ratio;
+    for (const strip of strips(total, height)) {
+      const { y } = await ask(slot, { type: 'shoot', ...strip });
+      // Give lazy images and scroll-in effects a moment.
+      await pause(120);
+      const image = await grab();
+      const crop = cropRect([slot.iframe.getBoundingClientRect()], image.width / innerWidth, image.width, image.height);
+      if (!canvas) {
+        ratio = crop.height / height;
+        canvas = document.createElement('canvas');
+        canvas.width = crop.width; canvas.height = Math.min(MAX_CANVAS, Math.round(total * ratio));
+        context = canvas.getContext('2d');
+      }
+      context.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, Math.round(y * ratio), crop.width, crop.height);
+    }
+    return await toBlob(canvas);
+  } finally {
+    await ask(slot, { type: 'restore' }).catch(() => {});
+  }
+}
+async function capture() {
+  if (!ready) throw Error(t('errorGrantFirst'));
+  if (capturing) throw Error(t('errorCapture'));
+  capturing = true; cutShort = false;
+  document.body.classList.add('capturing');
+  try { return state.shot === 'full' ? await captureFull(focused()) : await captureScreen(); }
+  finally {
+    document.body.classList.remove('capturing');
+    for (const slot of slots) slot.element.classList.remove('capture-hidden');
+    capturing = false; geometry();
+  }
+}
+function shotName() {
+  const d = new Date(), p = n => String(n).padStart(2, '0'), slot = focused(), full = state.shot === 'full';
+  const what = slots.length > 1 && !full ? `${slots.length}-devices` : `${describe(slot.key).name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${slot.size.width}x${slot.size.height}${full ? '-full' : ''}`;
+  return `viewport-${what}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
+}
+const shotDone = message => status(cutShort ? `${message} ${t('fullPageCut')}` : message);
+$('#shot-save').onclick = async () => {
+  try {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(await capture()); link.download = shotName(); link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    shotDone(t('screenshotSaved', link.download));
+  } catch (e) { error(e); }
 };
-observePreviewWidth($('.canvas'), geometry);
-geometry(); markDevice();
-start().catch(e=>{overlay(e.message);error(e)});
+// The clipboard write starts inside the click; ClipboardItem waits for the capture promise.
+$('#shot-copy').onclick = () => navigator.clipboard.write([new ClipboardItem({ 'image/png': capture() })]).then(() => shotDone(t('screenshotCopied')), error);
+function showShot() {
+  $('#shot-mode').querySelectorAll('button').forEach(b => { const on = b.dataset.mode === state.shot; b.classList.toggle('chosen', on); b.setAttribute('aria-pressed', String(on)); });
+  const full = state.shot === 'full';
+  $('#shot-note').textContent = t(full ? 'fullPageNote' : 'screenshotNote');
+}
+$('#shot-mode').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.shot = b.dataset.mode; showShot(); storePrefs(); };
+
+// ---- Controls ----
+$('#rotate-btn').onclick = () => { const { width, height } = focused().size; resizeFocused({ width: height, height: width }, focused().key); };
+for (const id of ['width', 'height']) $('#' + id).onchange = () => resizeFocused({ width: Number($('#width').value), height: Number($('#height').value) });
+$('#custom').onclick = () => { $('#width').focus(); $('#width').select(); };
+$('#save-device-btn').onclick = saveDevice;
+$('#device-name').onkeydown = e => { if (e.key === 'Enter') saveDevice(); };
+$('#zoom-in').onclick = () => { state.zoom = stepZoom(scale, 1); geometry(); storePrefs(); };
+$('#zoom-out').onclick = () => { state.zoom = stepZoom(scale, -1); geometry(); storePrefs(); };
+$('#zoom').onclick = () => { state.zoom = state.zoom === 'fit' ? 1 : 'fit'; geometry(); storePrefs(); };
+function showFrame() { $('#frame-segment').querySelectorAll('button').forEach(b => { const on = (b.dataset.frame === 'on') === state.frame; b.classList.toggle('chosen', on); b.setAttribute('aria-pressed', String(on)); }); }
+$('#frame-segment').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.frame = b.dataset.frame === 'on'; showFrame(); geometry(); storePrefs(); };
+$('#sync').onchange = () => { state.sync = $('#sync').checked; syncFrames(); storePrefs(); };
+function navigate() {
+  try { if (!ready) throw Error(t('errorGrantFirst')); loadAll(webUrl($('.address input').value)); status(t('loading')); } catch (e) { error(e); }
+}
+$('#navigate').onclick = navigate; $('.address input').onkeydown = e => { if (e.key === 'Enter') navigate(); };
+$('#reload').onclick = () => { for (const slot of slots) if (slot.url) loadSlot(slot, slot.url); };
+$('#focus-target').onclick = () => { const url = focused().url || siteUrl; if (url) chrome.tabs.create({ url, openerTabId: tabId }).catch(error); };
+$('#end-session').onclick = () => send('exit', { url: focused().url || siteUrl }).catch(error);
+$('#grant').onclick = async () => {
+  try { if (!await chrome.permissions.request(ACCESS)) return status(t('errorDenied'), true); await start(); } catch (e) { error(e); }
+};
+observePreviewWidth($('.canvas'), () => geometry());
+let resizeQueued = false;
+addEventListener('resize', () => { if (resizeQueued) return; resizeQueued = true; requestAnimationFrame(() => { resizeQueued = false; if (!capturing) geometry(); }); });
+
+// ---- Start ----
+async function start() {
+  if (!globalThis.chrome?.tabs) throw Error(t('errorNotExtension'));
+  tabId = (await chrome.tabs.getCurrent()).id;
+  if (!await chrome.permissions.contains(ACCESS)) {
+    $('#grant').hidden = false; for (const slot of slots) overlay(slot, t('overlayGrant'));
+    return status(t('statusGrant'));
+  }
+  $('#grant').hidden = true;
+  const session = await send('open', { url: params.get('url') });
+  ready = true;
+  if (session.url) { loadAll(session.url, true); status(t('statusReady')); }
+  else {
+    for (const slot of slots) overlay(slot, t('overlayEmpty'));
+    params.get('error') ? status(params.get('error'), true) : status(t('statusEmpty'));
+  }
+}
+async function init() {
+  const stored = (await globalThis.chrome?.storage?.local.get(['prefs', 'savedDevices']).catch(() => null)) || {};
+  saved = cleanSaved(stored.savedDevices);
+  const prefs = cleanPrefs(stored.prefs, saved);
+  Object.assign(state, { focus: prefs.focus, frame: prefs.frame, sync: prefs.sync, zoom: prefs.zoom, shot: prefs.shot });
+  slots = prefs.devices.map(createSlot);
+  $('#stage').append(...slots.map(slot => slot.element));
+  $('#sync').checked = state.sync; showFrame(); showShot(); renderDevices(); geometry();
+  await start();
+}
+init().catch(e => { for (const slot of slots) overlay(slot, e.message); error(e); });

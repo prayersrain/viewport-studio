@@ -1,6 +1,6 @@
 {
   "name": "viewport-mobile-studio",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "description": "Free, open-source Chrome extension for previewing websites at phone sizes.",
   "private": true,
   "license": "MIT",

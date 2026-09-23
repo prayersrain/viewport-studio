@@ -16,4 +16,4 @@ Please report vulnerabilities privately through GitHub: **Security → Report a 
 ## Known trade-offs (not vulnerabilities)
 
 - Inside the studio, a site's `X-Frame-Options` is removed, and so is its CSP when it contains `frame-ancestors`. This is how the preview works; see the README.
-- The optional host permission covers all http(s) sites so that navigation and login inside the phone keep working.
+- The optional host permission is `<all_urls>`, so that navigation and login inside the phone keep working and screenshots can use `captureVisibleTab`. `frame.js` itself only runs on http(s) pages.

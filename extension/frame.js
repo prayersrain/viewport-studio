@@ -7,14 +7,105 @@
   const style = document.createElement('style');
   style.textContent = '*{scrollbar-width:none!important}';
   (document.head || document.documentElement)?.append(style);
+
+  // A port goes only to extension pages, so the site cannot forge these messages.
+  // Studio names each iframe; the name is read before page scripts can change it.
+  const port = chrome.runtime.connect({ name: 'viewport-frame' }), slot = window.name;
+  let open = true, reported = '', shareScroll = false, quietUntil = 0, shooting = null;
+  const post = message => { if (open) try { port.postMessage({ slot, ...message }); } catch { open = false; } };
   // Studio cannot read a cross-origin frame's URL, so the page reports it.
-  let reported = '';
-  const report = () => {
-    if (location.href === reported) return;
-    reported = location.href;
-    chrome.runtime.sendMessage({ type: 'frame-url', url: reported }).catch(() => {});
-  };
+  const report = () => { if (location.href !== reported) post({ type: 'url', url: reported = location.href }); };
   report();
   // Single-page apps change URL without reloading; a string compare covers every router.
-  setInterval(report, 500);
+  const timer = setInterval(report, 500);
+  port.onDisconnect.addListener(() => { open = false; clearInterval(timer); });
+
+  // ---- Scroll sync ----
+  // Positions travel as fractions: devices lay the same page out at different lengths.
+  // Inner scroll containers are matched across devices by their structural path.
+  const fraction = (position, max) => max > 0 ? position / max : 0;
+  const pageMax = () => Math.max(0, (document.scrollingElement?.scrollHeight ?? 0) - innerHeight);
+  function pathOf(element) {
+    const parts = [];
+    for (let node = element; node && node !== document.documentElement && parts.length < 16; node = node.parentElement) {
+      if (node.id) { parts.unshift('#' + CSS.escape(node.id)); return parts.join('>'); }
+      const twins = node.parentElement ? [...node.parentElement.children].filter(child => child.tagName === node.tagName) : [];
+      parts.unshift(node.tagName.toLowerCase() + (twins.length > 1 ? `:nth-of-type(${twins.indexOf(node) + 1})` : ''));
+    }
+    return parts.join('>');
+  }
+  const queued = new Set();
+  document.addEventListener('scroll', event => {
+    if (!shareScroll || shooting || performance.now() < quietUntil) return;
+    const target = event.target === document ? document : event.target;
+    if (queued.has(target)) return;
+    if (!queued.size) requestAnimationFrame(() => {
+      for (const node of queued) {
+        if (node === document) post({ type: 'scroll', path: '', y: fraction(scrollY, pageMax()) });
+        else if (node.isConnected) post({ type: 'scroll', path: pathOf(node), x: fraction(node.scrollLeft, node.scrollWidth - node.clientWidth), y: fraction(node.scrollTop, node.scrollHeight - node.clientHeight) });
+      }
+      queued.clear();
+    });
+    queued.add(target);
+  }, { capture: true, passive: true });
+  function applyScroll({ path, x, y }) {
+    const clamp = value => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+    // Ignore the scroll events this causes, or devices would echo each other.
+    quietUntil = performance.now() + 250;
+    if (!path) return scrollTo({ left: scrollX, top: clamp(y) * pageMax(), behavior: 'instant' });
+    let node = null;
+    try { node = document.querySelector(path); } catch { /* path from a different layout */ }
+    node?.scrollTo({ left: clamp(x) * (node.scrollWidth - node.clientWidth), top: clamp(y) * (node.scrollHeight - node.clientHeight), behavior: 'instant' });
+  }
+
+  // ---- Full-page screenshot ----
+  // Studio captures one screen at a time while this page scrolls underneath.
+  // Fixed bars and stuck headers are shown once, not in every strip.
+  const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  function collectOverlays() {
+    const found = [], walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_ELEMENT);
+    for (let node = walker.currentNode; node; node = walker.nextNode()) {
+      const { position } = getComputedStyle(node);
+      if (position !== 'fixed' && position !== 'sticky') continue;
+      const box = node.getBoundingClientRect();
+      // Top-anchored fixed elements belong to the first strip, bottom-anchored ones to the last.
+      found.push({ node, position, bottom: box.top + box.height / 2 > innerHeight / 2, visibility: node.style.getPropertyValue('visibility'), priority: node.style.getPropertyPriority('visibility') });
+    }
+    return found;
+  }
+  function stuck(node) {
+    const top = parseFloat(getComputedStyle(node).top);
+    return Number.isFinite(top) && Math.abs(node.getBoundingClientRect().top - top) < 1;
+  }
+  function showOnly(first, last) {
+    for (const item of shooting.overlays) {
+      const hide = item.position === 'fixed' ? (item.bottom ? !last : !first) : !first && stuck(item.node);
+      if (hide) item.node.style.setProperty('visibility', 'hidden', 'important');
+      else item.node.style.setProperty('visibility', item.visibility, item.priority);
+    }
+  }
+  async function shoot({ y, first, last }) {
+    shooting ||= { x: scrollX, y: scrollY, overlays: [] };
+    if (first) { scrollTo({ left: 0, top: 0, behavior: 'instant' }); await nextFrame(); shooting.overlays = collectOverlays(); }
+    scrollTo({ left: 0, top: y, behavior: 'instant' });
+    showOnly(first, last);
+    await nextFrame();
+    return { y: scrollY };
+  }
+  function restore() {
+    if (!shooting) return;
+    for (const item of shooting.overlays) item.node.style.setProperty('visibility', item.visibility, item.priority);
+    scrollTo({ left: shooting.x, top: shooting.y, behavior: 'instant' });
+    shooting = null;
+  }
+
+  port.onMessage.addListener(async message => {
+    if (message.type === 'sync') shareScroll = message.scroll === true;
+    if (message.type === 'scroll') applyScroll(message);
+    // Requests carry an id; Studio waits for the matching reply.
+    const reply = data => post({ type: 'reply', id: message.id, ...data });
+    if (message.type === 'measure') reply({ height: innerHeight, scrollHeight: document.scrollingElement?.scrollHeight ?? innerHeight });
+    if (message.type === 'shoot') reply(await shoot(message));
+    if (message.type === 'restore') { restore(); reply({}); }
+  });
 })();

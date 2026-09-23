@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen Coffee — Viewport demo page</title>
+<!-- Fictional site for README screenshots and manual testing: sticky header, inner horizontal
+     scroller (#rail), responsive grid, and a phone-only fixed order bar (full-page capture). -->
+<style>
+  :root { --ink: #2b1d14; --accent: #c9733b; --cream: #f7efe6; --paper: #fffaf4; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); }
+  a { color: inherit; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 24px; padding: 14px 20px; background: var(--ink); color: var(--cream); }
+  .logo { font: 700 20px Georgia, serif; letter-spacing: -.5px; }
+  header nav { display: none; gap: 22px; margin-left: auto; font-size: 14px; }
+  header nav a { text-decoration: none; opacity: .85; }
+  .menu { margin-left: auto; width: 34px; height: 34px; border: 1px solid #ffffff44; border-radius: 8px; background: none; color: var(--cream); font-size: 18px; }
+  .hero { display: grid; gap: 22px; padding: 34px 20px 26px; background: var(--cream); }
+  .hero h1 { font: 700 clamp(30px, 8vw, 56px)/1.05 Georgia, serif; letter-spacing: -1px; margin: 0; }
+  .hero p { margin: 0; line-height: 1.6; color: #5b4636; max-width: 46ch; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .button { padding: 12px 18px; border-radius: 999px; background: var(--ink); color: var(--cream); text-decoration: none; font-weight: 600; font-size: 14px; }
+  .button.light { background: none; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .art { min-height: 190px; border-radius: 26px; background: radial-gradient(circle at 30% 30%, #f3c98b, transparent 45%), radial-gradient(circle at 70% 65%, #8a4b2a, transparent 50%), linear-gradient(135deg, #e7b17a, #6f3b22); }
+  section { padding: 30px 20px; }
+  h2 { font: 700 24px Georgia, serif; margin: 0 0 14px; }
+  #rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+  .drink { flex: 0 0 72%; scroll-snap-align: start; border-radius: 18px; padding: 16px; background: #fff; box-shadow: 0 6px 20px #2b1d1414; }
+  .drink .cup { height: 120px; border-radius: 12px; margin-bottom: 12px; }
+  .drink b { display: block; } .drink small { color: #8a735f; }
+  .grid { display: grid; gap: 14px; }
+  .card { padding: 18px; border-radius: 16px; background: #fff; box-shadow: 0 4px 14px #2b1d1410; line-height: 1.55; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .quote { font: italic 20px/1.5 Georgia, serif; padding: 26px; border-radius: 20px; background: var(--cream); margin: 0; }
+  footer { padding: 30px 20px 110px; background: #3d2a1e; color: #e9dccd; font-size: 14px; line-height: 1.8; }
+  .order { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: var(--accent); color: #fff; font-weight: 700; }
+  .order span { font-weight: 400; opacity: .9; font-size: 14px; }
+  @media (min-width: 700px) {
+    .hero { grid-template-columns: 1.1fr 1fr; align-items: center; padding: 56px 40px; }
+    section { padding: 40px; }
+    .drink { flex-basis: 40%; }
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 16px 40px; }
+    header nav { display: flex; } .menu { display: none; }
+    .order { display: none; }
+    footer { padding-bottom: 30px; }
+  }
+  @media (min-width: 1100px) {
+    .grid { grid-template-columns: repeat(3, 1fr); }
+    .drink { flex-basis: 23%; }
+    .hero, section, header, footer { padding-left: max(40px, calc(50% - 560px)); padding-right: max(40px, calc(50% - 560px)); }
+  }
+</style>
+</head>
+<body>
+<header><span class="logo">Lumen Coffee</span><nav><a href="#menu">Menu</a><a href="#visit">Visit</a><a href="#story">Story</a><a href="?page=2">Next page</a></nav><button class="menu" aria-label="Menu">☰</button></header>
+<div class="hero">
+  <div><h1>Slow coffee for fast mornings</h1><p>Small-batch roasts, brewed to order. This fictional page is built to show how one layout adapts from phone to desktop.</p>
+  <div class="actions"><a class="button" id="next" href="?page=2">See the menu</a><a class="button light" href="#visit">Find a café</a></div></div>
+  <div class="art" role="img" aria-label="Coffee illustration"></div>
+</div>
+<section id="menu"><h2>Today's pours</h2>
+  <div id="rail">
+    <div class="drink"><div class="cup" style="background:linear-gradient(135deg,#d9a36b,#7a4127)"></div><b>Honey oat latte</b><small>Oat milk · wildflower honey</small></div>
+    <div class="drink"><div class="cup" style="background:linear-gradient(135deg,#f0d3a8,#a4643b)"></div><b>Cortado</b><small>Equal parts, no fuss</small></div>
+    <div class="drink"><div class="cup" style="background:linear-gradient(135deg,#6b3b24,#24140c)"></div><b>Cold brew tonic</b><small>18-hour steep · citrus</small></div>
+    <div class="drink"><div class="cup" style="background:linear-gradient(135deg,#efe1c8,#c9733b)"></div><b>Cardamom flat white</b><small>Spiced, velvety</small></div>
+    <div class="drink"><div class="cup" style="background:linear-gradient(135deg,#b88a5a,#4f2c19)"></div><b>Single-origin pour-over</b><small>Rotating beans</small></div>
+    <div class="drink"><div class="cup" style="background:linear-gradient(135deg,#f5e6cf,#8f5a36)"></div><b>Vanilla bean cappuccino</b><small>Real vanilla, dry foam</small></div>
+  </div>
+</section>
+<section id="visit"><h2>Why people stay</h2>
+  <div class="grid">
+    <div class="card"><h3>Roasted weekly</h3>Beans never sit longer than seven days before they reach your cup.</div>
+    <div class="card"><h3>Quiet corners</h3>Every café has a no-music room for reading and focused work.</div>
+    <div class="card"><h3>Order ahead</h3>Skip the line from your phone and pick up at the side bar.</div>
+    <div class="card"><h3>Refill club</h3>Bring your own cup and the fourth refill of the day is on us.</div>
+    <div class="card"><h3>Open early</h3>Doors open at 6:30 on weekdays and 7:30 on weekends.</div>
+    <div class="card"><h3>Local pastries</h3>Baked each morning by a bakery two streets away.</div>
+  </div>
+</section>
+<section id="story"><h2>Our story</h2><p class="quote">“We started with one grinder and a folding table. Ten years later, the table is still here.”</p></section>
+<footer>Lumen Coffee is a fictional brand used to demonstrate Viewport.<br>12 Harbor Lane · Open daily · hello@example.com</footer>
+<div class="order">Order ahead <span>Ready in 8 min</span></div>
+</body>
+</html>

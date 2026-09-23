@@ -22,14 +22,18 @@ These keep the project small, safe and trustworthy. A pull request that breaks o
 
 ## Manual checklist
 
-Unit tests use mocked Chrome APIs, so please also check these in a real browser:
+Unit tests use mocked Chrome APIs, so please also check these in a real browser. [`docs/demo.html`](docs/demo.html) covers the tricky cases; serve the `docs` folder (for example `python -m http.server 8000`) and open `http://localhost:8000/demo.html`.
 
 1. Click the icon on a website. The same tab becomes the studio and no debugging banner appears.
 2. On a fresh install, **Allow website access** shows Chrome's permission dialog and the site loads after you approve it.
 3. A site that sends `X-Frame-Options` (for example github.com) loads inside the phone.
 4. Click, scroll, type, paste and navigate inside the phone. The address bar follows the page.
 5. Presets, custom size and rotation update the page without a reload.
-6. Clicking the icon again returns the tab to the last page. That site still refuses to be framed in a normal tab.
+6. **＋** adds a device. Clicking a link or scrolling in one device follows in the others while sync is on.
+7. **Save PNG** downloads the devices without the studio UI. **Copy** puts the same image on the clipboard. **Full page** on the demo shows the header once at the top and the orange order bar once at the bottom.
+8. The link icon above a device takes it out of sync: it stays on its page while the others navigate.
+9. Reload the studio. Your devices, zoom and saved sizes are still there.
+10. Clicking the icon again returns the tab to the last page. That site still refuses to be framed in a normal tab.
 
 ## Issues and pull requests
 

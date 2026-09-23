@@ -1,4 +1,4 @@
-import { PRESETS, ACCESS, webUrl, viewport, framingRules } from './core.js';
+import { ACCESS, FRAME_MATCHES, webUrl, framingRules } from './core.js';
 import { t } from './i18n.js';
 
 // Direct mode: the website renders in an iframe inside Studio, in the same tab.
@@ -25,7 +25,7 @@ async function isStudio(tabId) {
 }
 async function frameScript() {
   const [existing] = await chrome.scripting.getRegisteredContentScripts({ ids: ['viewport-frame'] });
-  if (!existing) await chrome.scripting.registerContentScripts([{ id: 'viewport-frame', js: ['frame.js'], matches: ACCESS.origins, allFrames: true, runAt: 'document_start' }]);
+  if (!existing) await chrome.scripting.registerContentScripts([{ id: 'viewport-frame', js: ['frame.js'], matches: FRAME_MATCHES, allFrames: true, runAt: 'document_start' }]);
 }
 async function forget(tabId) {
   const sessions = await get();
@@ -50,7 +50,7 @@ chrome.action.onClicked.addListener(tab => serial(async () => {
   try { url = webUrl(tab.url); } catch (error) {
     return chrome.tabs.update(tab.id, { url: STUDIO + '?error=' + encodeURIComponent(error.message) });
   }
-  sessions[tab.id] = { url, size: sessions[tab.id]?.size || viewport(PRESETS.iphone) };
+  sessions[tab.id] = { url };
   await save(sessions);
   await chrome.tabs.update(tab.id, { url: STUDIO + '?url=' + encodeURIComponent(url) });
 }));
@@ -64,29 +64,19 @@ async function handle(message, sender) {
     await frameScript();
     await frame(id, true);
     // Prefer the tracked URL: a reloaded Studio resumes where the frame was.
-    const session = sessions[id] ||= { size: viewport(PRESETS.iphone) };
+    const session = sessions[id] ||= {};
     if (!session.url && message.url) session.url = webUrl(message.url);
     await save(sessions);
     return session;
   }
   const session = sessions[id];
   if (!session) throw Error(t('errorNoSession'));
-  if (message.type === 'size') { session.size = viewport(message.size); await save(sessions); return session.size; }
+  // Studio reports the focused device's page so the icon can return to it.
+  if (message.type === 'track') { session.url = webUrl(message.url); await save(sessions); return {}; }
   if (message.type === 'exit') { await leave(id, message.url || session.url); return {}; }
   throw Error(t('errorCommand'));
 }
-// frame.js reports the URL of the page inside Studio so the icon can return to it.
-async function track(tabId, url) {
-  const sessions = await get();
-  if (!sessions[tabId]) return;
-  try { sessions[tabId].url = webUrl(url); } catch { return; }
-  await save(sessions);
-}
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (message?.type === 'frame-url') {
-    if (sender.id === chrome.runtime.id && sender.frameId > 0 && sender.tab) serial(() => track(sender.tab.id, message.url));
-    return;
-  }
   serial(() => handle(message, sender)).then(value => respond({ ok: true, value }), error => respond({ ok: false, error: error.message }));
   return true;
 });
