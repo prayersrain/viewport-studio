@@ -1,0 +1,19 @@
+# Security
+
+Viewport removes anti-framing headers and holds broad host access, so security reports matter.
+
+## Reporting
+
+Please report vulnerabilities privately through GitHub: **Security → Report a vulnerability** on this repository. Do not open a public issue. Include the steps to reproduce and the Chrome version.
+
+## In scope
+
+- Framing rules that apply outside a studio tab, or that survive after leaving the studio.
+- `frame.js` behavior on pages that are not directly inside the studio.
+- Web pages or other extensions that can send commands to the studio or background worker.
+- Any way to exfiltrate data from pages shown in the studio.
+
+## Known trade-offs (not vulnerabilities)
+
+- Inside the studio, a site's `X-Frame-Options` is removed, and so is its CSP when it contains `frame-ancestors`. This is how the preview works; see the README.
+- The optional host permission covers all http(s) sites so that navigation and login inside the phone keep working.

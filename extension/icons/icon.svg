@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Source for the PNG icons; mirrors the Studio header mark: two tilted phone outlines. -->
+  <g transform="rotate(-12 64 64)">
+    <rect x="47" y="25" width="52" height="84" rx="13" fill="#fff" stroke="#99aa75" stroke-width="9"/>
+    <rect x="31" y="15" width="52" height="84" rx="13" fill="#fff" stroke="#245c45" stroke-width="10"/>
+    <path d="M49 29h16" stroke="#245c45" stroke-width="7" stroke-linecap="round"/>
+  </g>
+</svg>

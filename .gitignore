@@ -1,0 +1,9 @@
+node_modules/
+# Local backup of the pre-0.3 debugger version; not part of the repo.
+archive/
+# Never commit extension signing keys or packed builds.
+*.pem
+*.crx
+*.zip
+.DS_Store
+Thumbs.db
