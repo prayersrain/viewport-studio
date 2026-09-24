@@ -1,4 +1,4 @@
-import { PRESETS, MAX_DEVICES, MAX_CANVAS, ACCESS, viewport, webUrl, presetFor, deviceBox, fitScale, stepZoom, cropRect, strips, cleanPrefs, cleanSaved } from './core.js';
+import { PRESETS, MAX_DEVICES, MAX_CANVAS, ACCESS, AGENTS, viewport, webUrl, presetFor, deviceBox, fitScale, stepZoom, cropRect, strips, cleanPrefs, cleanSaved } from './core.js';
 import { t, localize } from './i18n.js';
 import { observePreviewWidth } from './layout.js';
 const $ = selector => document.querySelector(selector);
@@ -6,7 +6,7 @@ const GAP = 28; // screen px between devices; must match .phone-space gap
 const GROUPS = { phone: 'groupPhone', tablet: 'groupTablet', desktop: 'groupDesktop', saved: 'groupSaved' };
 const params = new URLSearchParams(location.search);
 // Device layout lives in storage.local (survives restarts); the page URL lives in the background session.
-const state = { focus: 0, frame: true, sync: true, syncInput: false, zoom: 'fit', shot: 'screen' };
+const state = { focus: 0, frame: true, sync: true, syncInput: false, zoom: 'fit', shot: 'screen', agent: 'desktop' };
 let slots = [], saved = [], ready = false, tabId, scale = 1, siteUrl = '', capturing = false, cutShort = false, slotCount = 0;
 
 localize();
@@ -26,7 +26,7 @@ const frameOf = slot => describe(slot.key).frame || 'generic';
 // A saved device keeps its name when its size is typed in again.
 const keyFor = size => presetFor(size) !== 'custom' ? presetFor(size) : saved.find(d => (d.width === size.width && d.height === size.height) || (d.width === size.height && d.height === size.width))?.id || 'custom';
 function storePrefs() {
-  const prefs = { devices: slots.map(({ key, size, linked }) => ({ key, ...size, linked })), focus: state.focus, frame: state.frame, sync: state.sync, syncInput: state.syncInput, zoom: state.zoom, shot: state.shot };
+  const prefs = { devices: slots.map(({ key, size, linked }) => ({ key, ...size, linked })), focus: state.focus, frame: state.frame, sync: state.sync, syncInput: state.syncInput, zoom: state.zoom, shot: state.shot, agent: state.agent };
   globalThis.chrome?.storage?.local.set({ prefs }).catch(() => {});
 }
 
@@ -37,16 +37,31 @@ function createSlot({ key, width, height, linked = true }) {
   const slot = { id: `viewport-${Date.now().toString(36)}-${slotCount++}`, key, size: viewport({ width, height }), element,
     body: element.querySelector('.slot-body'), phone: element.querySelector('.phone'), iframe: element.querySelector('iframe'),
     overlay: element.querySelector('.connection-overlay'), host: element.querySelector('.site-host'), url: '', following: false, frameId: null, port: null, linked };
-  // frame.js reads this name to tell Studio which device it belongs to.
-  slot.iframe.name = slot.id;
-  slot.iframe.addEventListener('load', () => { if (slot.url) loaded(slot); });
-  // Clicking into a device (its frame gets focus) makes it the one the inspector edits.
-  slot.iframe.addEventListener('focus', () => focusSlot(slot));
+  slot.iframe.name = frameName(slot);
+  wireFrame(slot);
   element.addEventListener('pointerdown', () => focusSlot(slot));
   element.querySelector('.slot-close').onclick = event => { event.stopPropagation(); removeSlot(slot); };
   // An unlinked device keeps its own page and scroll position.
   element.querySelector('.slot-link').onclick = () => { slot.linked = !slot.linked; geometry(); storePrefs(); syncFrames(); };
   return slot;
+}
+// The iframe name identifies the device to frame.js and carries the user agent to agent.js,
+// which must decide before any page script runs.
+const frameName = slot => state.agent === 'desktop' ? slot.id : `${slot.id}|${state.agent}`;
+function wireFrame(slot) {
+  slot.iframe.addEventListener('load', () => { if (slot.url) loaded(slot); });
+  // Clicking into a device (its frame gets focus) makes it the one the inspector edits.
+  slot.iframe.addEventListener('focus', () => focusSlot(slot));
+}
+// A frame keeps the name it was created with, even if the attribute changes later,
+// so a new name needs a new iframe element (named before it enters the document).
+function freshFrame(slot) {
+  const iframe = slot.iframe.cloneNode(false);
+  iframe.removeAttribute('src'); iframe.name = frameName(slot);
+  try { slot.port?.disconnect(); } catch { /* already gone */ }
+  slot.iframe.replaceWith(iframe);
+  Object.assign(slot, { iframe, frameId: null, port: null });
+  wireFrame(slot);
 }
 function focusSlot(slot) {
   const index = slots.indexOf(slot);
@@ -82,6 +97,8 @@ function resizeFocused(next, key) {
 // ---- Layout ----
 // Devices scale together; "fit" picks the largest scale that shows them all.
 function geometry(bounds) {
+  // The resize observer can fire before init() has built the devices from storage.
+  if (!slots.length) return;
   const stage = $('#stage'), multi = slots.length > 1;
   stage.classList.toggle('multi', multi);
   const framed = state.frame && !bounds?.plain;
@@ -241,7 +258,7 @@ globalThis.chrome?.runtime?.onConnect?.addListener(port => {
   let slot = null;
   port.onMessage.addListener(message => {
     // First report maps the frame to its device by iframe name; later documents by frameId.
-    slot ||= slots.find(s => s.frameId === sender.frameId) || slots.find(s => s.frameId === null && s.id === message.slot);
+    slot ||= slots.find(s => s.frameId === sender.frameId) || slots.find(s => s.frameId === null && s.iframe.name === message.slot);
     if (!slot || !slots.includes(slot)) return;
     if (slot.port !== port) { slot.frameId = sender.frameId; slot.port = port; post(slot, syncMessage(slot)); }
     if (message.type === 'url') reported(slot, message.url);
@@ -374,6 +391,16 @@ $('#zoom').onclick = () => setZoom(state.zoom === 'fit' ? 1 : 'fit');
 function showFrame() { $('#frame-segment').querySelectorAll('button').forEach(b => { const on = (b.dataset.frame === 'on') === state.frame; b.classList.toggle('chosen', on); b.setAttribute('aria-pressed', String(on)); }); }
 function setFrame(on) { state.frame = on; showFrame(); geometry(); storePrefs(); }
 $('#frame-segment').onclick = e => { const b = e.target.closest('button'); if (b) setFrame(b.dataset.frame === 'on'); };
+// A new user agent needs fresh requests and a fresh page world, so every device reloads.
+function showAgent() { $('#agent-segment').querySelectorAll('button').forEach(b => { const on = b.dataset.agent === state.agent; b.classList.toggle('chosen', on); b.setAttribute('aria-pressed', String(on)); }); }
+async function setAgent(agent) {
+  if (!AGENTS.includes(agent) || agent === state.agent) return;
+  state.agent = agent; showAgent(); storePrefs();
+  for (const slot of slots) freshFrame(slot);
+  if (!ready) return;
+  try { await send('agent', { agent }); for (const slot of slots) if (slot.url) loadSlot(slot, slot.url); } catch (e) { error(e); }
+}
+$('#agent-segment').onclick = e => { const b = e.target.closest('button'); if (b) setAgent(b.dataset.agent); };
 $('#sync').onchange = () => { state.sync = $('#sync').checked; syncFrames(); geometry(); storePrefs(); };
 $('#sync-input').onchange = () => { state.syncInput = $('#sync-input').checked; syncFrames(); storePrefs(); };
 function navigate() {
@@ -416,6 +443,7 @@ const shortcuts = {
   r: rotate, '+': () => setZoom(stepZoom(scale, 1)), '=': () => setZoom(stepZoom(scale, 1)), '-': () => setZoom(stepZoom(scale, -1)),
   0: () => setZoom(state.zoom === 'fit' ? 1 : 'fit'), f: () => setFrame(!state.frame), l: toggleLink,
   s: saveShot, c: copyShot, p: () => setShot(state.shot === 'full' ? 'screen' : 'full'), t: cycleTheme,
+  u: () => setAgent(AGENTS[(AGENTS.indexOf(state.agent) + 1) % AGENTS.length]),
 };
 addEventListener('keydown', event => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.repeat) return;
@@ -440,7 +468,7 @@ async function start() {
     return status(t('statusGrant'));
   }
   $('#grant').hidden = true;
-  const session = await send('open', { url: params.get('url') });
+  const session = await send('open', { url: params.get('url'), agent: state.agent });
   ready = true;
   if (session.url) { loadAll(session.url, true); status(t('statusReady')); }
   else {
@@ -452,10 +480,10 @@ async function init() {
   const stored = (await globalThis.chrome?.storage?.local.get(['prefs', 'savedDevices']).catch(() => null)) || {};
   saved = cleanSaved(stored.savedDevices);
   const prefs = cleanPrefs(stored.prefs, saved);
-  Object.assign(state, { focus: prefs.focus, frame: prefs.frame, sync: prefs.sync, syncInput: prefs.syncInput, zoom: prefs.zoom, shot: prefs.shot });
+  Object.assign(state, { focus: prefs.focus, frame: prefs.frame, sync: prefs.sync, syncInput: prefs.syncInput, zoom: prefs.zoom, shot: prefs.shot, agent: prefs.agent });
   slots = prefs.devices.map(createSlot);
   $('#stage').append(...slots.map(slot => slot.element));
-  $('#sync').checked = state.sync; $('#sync-input').checked = state.syncInput; showFrame(); showShot(); showTheme(); renderDevices(); geometry();
+  $('#sync').checked = state.sync; $('#sync-input').checked = state.syncInput; showFrame(); showShot(); showTheme(); showAgent(); renderDevices(); geometry();
   await start();
 }
 init().catch(e => { for (const slot of slots) overlay(slot, e.message); error(e); });

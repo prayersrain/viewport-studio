@@ -154,7 +154,7 @@ function formDom() {
       append(...nodes) { for (const node of nodes) { node.parentElement = this; this.children.push(node); } return this; }
       matches(selector) { return selector === 'a[href]' ? this.tagName === 'A' && !!this.href : this.tagName === selector.toUpperCase(); }
       closest(selector) { for (let node = this; node; node = node.parentElement) if (node.matches(selector)) return node; return null; }
-      click() { this.clicks++; } dispatchEvent(event) { this.events.push(event.type); } }
+      click() { this.clicks++; } dispatchEvent(event) { this.events.push(event.type); } getBoundingClientRect() { return { left: 10, top: 20, width: 100, height: 40 }; } }
     class HTMLElement extends Element {}
     class HTMLInputElement extends HTMLElement { get value() { return this._value ?? ''; } set value(v) { this._value = 'set:' + v; } }
     class HTMLTextAreaElement extends HTMLElement {} class HTMLSelectElement extends HTMLElement {}
@@ -168,6 +168,7 @@ function runForm() {
   const context = {
     location: { href: 'https://site.example/', ancestorOrigins: ['chrome-extension://viewport'] }, name: 'viewport-a', innerHeight: 800, scrollX: 0, scrollY: 0,
     CSS: { escape: value => value }, Event: class { constructor(type, init) { this.type = type; this.bubbles = init?.bubbles; } },
+    MouseEvent: class { constructor(type, init) { Object.assign(this, init, { type }); } }, PointerEvent: class { constructor(type, init) { Object.assign(this, init, { type }); } },
     chrome: { runtime: { getURL: path => 'chrome-extension://viewport/' + path, connect: () => port } },
     setInterval: () => 1, clearInterval: () => {}, requestAnimationFrame: () => {}, performance: { now: () => 0 }, scrollTo() {},
   };
@@ -213,6 +214,7 @@ test('replayed clicks and typing reach the matching element through framework-vi
   context.lookup = { '#b': button, '#f': field, '#p': secret, '#l': inLink };
   port.onMessage.fire({ type: 'click', path: '#b' }); port.onMessage.fire({ type: 'click', path: '#l' }); port.onMessage.fire({ type: 'click', path: '#missing' });
   assert.deepEqual([button.clicks, inLink.clicks], [1, 0], 'links are left to navigation sync');
+  assert.deepEqual([...button.events], ['pointerdown', 'mousedown', 'pointerup', 'mouseup'], 'the whole press is replayed before click(), for menus that open on press');
   port.onMessage.fire({ type: 'input', path: '#f', value: 'ana@example.com' });
   assert.equal(field._value, 'set:ana@example.com', 'value goes through the prototype setter');
   assert.deepEqual([...field.events], ['input', 'change']);

@@ -4,20 +4,24 @@ This is the planned work, not a promise. Pick an item, open an issue to discuss 
 
 ## Next
 
-- **Accurate mode (opt-in).** Optional `chrome.debugger` emulation for touch, device pixel ratio and user agent. The debugging banner would appear only while the user has this mode on.
-- **Mobile user agent.** Add a server-side user agent through a studio-scoped request header rule, and possibly patch it in the page.
-- **Pointer replay.** Replay pointer and mouse-down events, not only clicks, so more menus and sliders follow in click sync.
+- **Drag to scroll.** Let a mouse drag scroll a device like a finger, without faking touch support.
+- **Screen recording.** Record a device to video for bug reports, with `tabCapture` as an optional permission.
+- **End-to-end tests in CI.** Use Playwright with Chromium or Chrome for Testing. Branded Chrome ignores `--load-extension`.
 
 ## Later
 
-- **Screen recording.** Capture the tab with `tabCapture` and `MediaRecorder`. The recorder produces WebM, so MP4 needs conversion.
 - **Agent connection.** Let local coding agents (Claude Code, Codex) inspect or drive the preview through MCP.
 - **Firefox support.**
 - **Rotation animation.**
-- **End-to-end tests in CI.** Use Playwright with Chromium or Chrome for Testing. Branded Chrome ignores `--load-extension`.
+- **Per-device user agent.** Chrome's request rules can target a tab but not a single frame, so today every device in the Studio shares one agent.
+
+## On hold
+
+- **Accurate mode (touch, device pixel ratio via `chrome.debugger`).** Chrome does not allow `debugger` as an optional permission, so shipping it would put the debugger warning on every install, even for people who never use it. It could live in a separate build.
 
 ## Done
 
+- 0.7.0: mobile user agent (header, client hints and page scripts), full-press click replay.
 - 0.6.0: keyboard shortcuts and a global toggle, dark theme, experimental click and typing sync, animated README demo.
 - 0.5.0: full-page screenshots, inner scroll sync, per-device unlink, demo site and README images.
 - 0.4.0: side-by-side devices with synced navigation and scroll, screenshots, ten presets and saved custom sizes, fit and true-size zoom.

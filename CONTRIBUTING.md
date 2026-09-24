@@ -16,6 +16,7 @@ These keep the project small, safe and trustworthy. A pull request that breaks o
 - **No network calls, analytics or remote code.**
 - **Never use `chrome.debugger` in the default mode.** It brings back the debugging banner. A future opt-in "accurate mode" must stay opt-in.
 - **Keep header changes scoped** to sub-frames in studio tabs (`tabIds` + `resourceTypes: ['sub_frame']`). Clean them up when the studio goes away.
+- **`agent.js` runs in the page's own world.** It must stay inert unless its frame is a Studio device that asked for a phone agent, and its strings must match `userAgent()` in `core.js` (a test compares them).
 - **`frame.js` must stay inert outside the studio.** It runs on every http(s) frame and must exit immediately unless its direct parent is the studio.
 - **All UI colors go through the theme tokens** at the top of `studio.css`, so light and dark stay in step. Phone hardware and the website surface keep fixed colors.
 - **Click and typing sync never copies password or file fields,** and only shares trusted user events.
@@ -37,8 +38,9 @@ Unit tests use mocked Chrome APIs, so please also check these in a real browser.
 9. With **Also sync clicks and typing** on, typing a name, changing the size and ticking **Oat milk** in the demo's order form updates the other devices. **Show pickup times** opens in all of them.
 10. `?` lists the shortcuts; `R`, `0`, `F`, `T` and `1`–`4` work after clicking outside the phone. `Alt+Shift+V` toggles Viewport from a normal tab.
 11. The header's theme button cycles auto, light and dark, and a forced theme survives a reload.
-12. Reload the studio. Your devices, zoom and saved sizes are still there.
-13. Clicking the icon again returns the tab to the last page. That site still refuses to be framed in a normal tab.
+12. **User agent → iPhone** reloads the devices; a "what is my user agent" page shows iPhone Safari inside the Studio and your normal browser in a normal tab.
+13. Reload the studio. Your devices, zoom and saved sizes are still there.
+14. Clicking the icon again returns the tab to the last page. That site still refuses to be framed in a normal tab.
 
 ## Issues and pull requests
 

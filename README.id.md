@@ -14,6 +14,7 @@ Extension Chrome gratis dan open source untuk melihat website dalam ukuran HP di
 - **Screenshot.** Simpan PNG atau salin ke clipboard, dengan atau tanpa bingkai. **Halaman penuh** menangkap halaman dari atas sampai bawah; header yang menempel dan bar fixed hanya muncul sekali.
 - **Daftar device.** Sepuluh preset HP, tablet, dan desktop, plus ukuran custom yang bisa diberi nama dan disimpan.
 - **Zoom.** Muat semua di layar (fit) atau tampilkan ukuran asli (100%).
+- **User agent mobile.** Ganti Studio antara Desktop, iPhone, dan Android. Server dan script halaman sama-sama melihat browser HP.
 - **Shortcut keyboard.** Tekan `?` di studio untuk melihat daftarnya. `Alt+Shift+V` membuka atau menutup Viewport dari tab mana pun.
 - **Tema gelap.** Mengikuti sistem, atau pilih terang/gelap lewat tombol di header.
 - **Sinkron klik dan ketikan (eksperimental).** Isi form atau buka menu sekali, device lain ikut.
@@ -52,14 +53,15 @@ Penjelasan tiap izin ada di [README.md](README.md#how-it-works).
 
 ## Batasan
 
-- Hanya ukuran viewport CSS yang sama dengan perangkat. DPR, event sentuh, `navigator.userAgent`, dan media query `hover`/`pointer` tetap bernilai desktop. Preset iPhone tetap memakai mesin Chrome, bukan Safari.
+- Hanya ukuran viewport CSS dan, kalau dipilih, user agent yang sama dengan perangkat. DPR, event sentuh, dan media query `hover`/`pointer` tetap bernilai desktop, dan preset iPhone tetap dirender mesin Chrome, bukan Safari.
+- User agent berlaku untuk semua device di tab Studio, karena aturan request Chrome tidak bisa menargetkan satu frame saja. Preset iPad memakai agent desktop, sama seperti Safari di iPadOS. Web worker tetap memakai agent desktop.
 - Halaman tanpa meta viewport dirender selebar perangkat, bukan layout 980px yang di-zoom seperti di browser HP.
 - Di dalam preview, CSP situs diabaikan jika berisi `frame-ancestors`. Masalah yang berkaitan dengan CSP perlu diuji di tab biasa.
 - Chrome memblokir alamat `http://` non-localhost (misalnya `http://192.168.x.x`) sebagai mixed content. Gunakan `localhost`, `127.0.0.1`, atau https.
 - Framebuster yang dijalankan setelah klik pengguna bisa mengambil alih tab.
 - Resolusi screenshot bergantung pada layar. Perangkat ditampilkan sendirian sesaat dalam ukuran terbesar yang muat di jendela, dan tab Viewport harus tetap di depan sampai screenshot selesai.
 - Screenshot halaman penuh men-scroll halaman satu layar demi satu layar (sekitar 0,6 detik per layar). Animasi yang muncul saat scroll bisa terlihat berbeda, dan halaman yang sangat panjang dipotong di 32.000 piksel gambar.
-- Sinkron klik dan ketikan memutar ulang aksi berdasarkan posisi elemen di halaman, sama seperti sinkron scroll di dalam halaman. Link diserahkan ke sinkron navigasi, dan kolom password maupun file tidak pernah disalin. Widget yang hanya bereaksi pada event pointer atau mouse-down mungkin tidak merespons klik yang diputar ulang.
+- Sinkron klik dan ketikan memutar ulang aksi berdasarkan posisi elemen di halaman, sama seperti sinkron scroll di dalam halaman. Link diserahkan ke sinkron navigasi, dan kolom password maupun file tidak pernah disalin. Klik yang diputar ulang mencakup tekanan penuh (pointer dan mouse down/up), tetapi drag, hover, dan tekan lama tidak diputar ulang.
 - Area scroll di dalam halaman dicocokkan antar-device berdasarkan posisinya di struktur halaman. Kalau markup-nya berbeda per ukuran layar, area itu tidak ikut sinkron. Navigasi yang disinkronkan memuat ulang halaman di perangkat lain, termasuk perpindahan route di single-page app.
 
 Rencana fitur ada di [ROADMAP.md](ROADMAP.md).

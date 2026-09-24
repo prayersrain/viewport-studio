@@ -14,6 +14,7 @@ A free, open-source Chrome extension for previewing websites at phone sizes insi
 - **Screenshots.** Save a PNG or copy it to the clipboard, with or without the device frame. **Full page** captures the whole page from top to bottom and shows sticky headers and fixed bars only once.
 - **Device library.** Ten phone, tablet and desktop presets, plus custom sizes you name and keep.
 - **Zoom.** Fit everything on screen, or view devices at true size (100%).
+- **Mobile user agent.** Switch the Studio between Desktop, iPhone and Android. Servers and page scripts both see the phone browser.
 - **Keyboard shortcuts.** Press `?` in the studio for the list. `Alt+Shift+V` opens or closes Viewport from any tab.
 - **Dark theme.** Follows your system, or pick light or dark with the button in the header.
 - **Click and typing sync (experimental).** Fill a form or open a menu once and the other devices follow.
@@ -48,24 +49,27 @@ Most websites refuse to be shown inside an iframe (`X-Frame-Options`, CSP `frame
 
 A small content script (`frame.js`) runs only when its direct parent is the studio (checked through `location.ancestorOrigins`). It hides desktop scrollbars, which would otherwise take about 15px of layout width. It also reports the page URL, and the scroll position while sync is on, to the studio over an extension port that the web page cannot forge. It exits immediately on every other page.
 
+When you pick an iPhone or Android user agent, a session rule sets the `User-Agent` header (and the matching client hints) on requests from the Studio tab's devices, and `agent.js` changes `navigator.userAgent`, `platform`, `vendor` and `userAgentData` in the page's own world. `agent.js` only acts when its frame sits directly inside an extension page and carries a Studio device name.
+
 | Permission | Why |
 |---|---|
 | `activeTab` | Read the URL of the tab where you clicked the icon. |
 | `storage` | Keep the current page for the browser session, and your devices, layout and saved sizes across restarts. |
-| `scripting` | Register `frame.js` (http and https pages only). |
-| `declarativeNetRequestWithHostAccess` | Apply the studio-only framing rules. |
+| `scripting` | Register `frame.js` and `agent.js` (http and https pages only). |
+| `declarativeNetRequestWithHostAccess` | Apply the studio-only framing and user-agent rules. |
 | `<all_urls>` (optional) | Requested once from the studio. It covers framing, login cookies inside the frame, `frame.js` and screenshots (`captureVisibleTab` requires `<all_urls>`). |
 
 ## Limitations
 
-- Only the CSS viewport size matches the device. Device pixel ratio, touch events, `navigator.userAgent` and the `hover`/`pointer` media features stay desktop values. iPhone presets still use Chrome's engine, not Safari.
+- Only the CSS viewport size and, if you pick one, the user agent match the device. Device pixel ratio, touch events and the `hover`/`pointer` media features stay desktop values, and iPhone presets still render with Chrome's engine, not Safari.
+- The user agent applies to every device in the Studio tab, because Chrome's request rules cannot target a single frame. iPad presets use the desktop agent, as iPadOS Safari does. Web workers keep the desktop agent.
 - Pages without a viewport meta tag render at device width instead of the zoomed-out 980px layout that mobile browsers use.
 - Inside the preview, Viewport ignores a site's CSP when that CSP contains `frame-ancestors`. Test CSP-related issues in a normal tab.
 - Chrome blocks plain `http://` addresses other than localhost (such as `http://192.168.x.x`) as mixed content. Use `localhost`, `127.0.0.1` or https.
 - A framebusting script that runs after a user click can take over the tab.
 - Screenshot resolution depends on your screen. Devices are briefly shown alone at the largest size that fits the window, and the Viewport tab must stay in front until the screenshot is done.
 - Full-page screenshots scroll the page one screen at a time (about 0.6 seconds per screen). Animations that play on scroll can look different from a normal visit, and extremely long pages are cut at 32,000 image pixels.
-- Click and typing sync replays actions by element position in the page, like inner scroll sync. Links are left to navigation sync, and password and file fields are never copied. Widgets that react only to pointer or mouse-down events may not respond to a replayed click.
+- Click and typing sync replays actions by element position in the page, like inner scroll sync. Links are left to navigation sync, and password and file fields are never copied. A replayed click includes the full press (pointer and mouse down/up), but drags, hovers and long presses are not replayed.
 - Inner scroll areas are matched between devices by their position in the page. If a layout builds different markup per screen size, that area is not synced. A synced navigation fully loads the page in the other devices, including single-page-app route changes.
 
 See [ROADMAP.md](ROADMAP.md) for planned features.

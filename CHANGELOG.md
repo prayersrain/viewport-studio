@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- Mobile user agent: Desktop, iPhone or Android for the whole Studio tab (shortcut `U`). A session rule sets the header and client hints; `agent.js` (page world) sets `navigator.userAgent`, `platform`, `vendor` and `userAgentData`. The choice survives reloads.
+- Click sync replays the full press (pointer and mouse down/up) before `click()`, so menus that open on press follow too.
+- Fixed: an error on Studio load when the resize observer fired before devices were built.
+- Accurate mode is on hold: Chrome does not allow `debugger` as an optional permission, so it would add the debugger warning to every install.
+
 ## 0.6.0
 
 - Keyboard shortcuts in the studio (press `?` for the list) and a global `Alt+Shift+V` to open or close Viewport from any tab.

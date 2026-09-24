@@ -101,5 +101,9 @@
   "close": { "message": "Tutup" },
   "themeAuto": { "message": "Tema: ikut sistem" },
   "themeLight": { "message": "Tema: terang" },
-  "themeDark": { "message": "Tema: gelap" }
+  "themeDark": { "message": "Tema: gelap" },
+  "agentLabel": { "message": "User agent" },
+  "agentDesktop": { "message": "Desktop" },
+  "agentNote": { "message": "Server dan script halaman melihat browser ini. Berlaku untuk semua device di tab ini, dan halaman dimuat ulang." },
+  "kbAgent": { "message": "User agent: desktop, iPhone, atau Android" }
 }

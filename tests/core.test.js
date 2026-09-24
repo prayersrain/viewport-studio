@@ -29,7 +29,7 @@ test('framing rules only touch sub-frames inside one Studio tab',()=>{
   assert.deepEqual(rules[1].condition.responseHeaders,[{header:'content-security-policy',values:['*frame-ancestors*']}]);
 });
 
-import { presetFor, deviceBox, fitScale, stepZoom, ZOOM_STEPS, cropRect, cleanPrefs, cleanSaved, MAX_DEVICES, ACCESS, FRAME_MATCHES, strips } from '../extension/core.js';
+import { userAgent, ruleCount, AGENTS, presetFor, deviceBox, fitScale, stepZoom, ZOOM_STEPS, cropRect, cleanPrefs, cleanSaved, MAX_DEVICES, ACCESS, FRAME_MATCHES, strips } from '../extension/core.js';
 test('every preset is a valid device with a known group and bezel',()=>{
   for(const [key,preset] of Object.entries(PRESETS)){
     assert.doesNotThrow(()=>viewport(preset),key);
@@ -76,7 +76,8 @@ test('stored preferences are rebuilt from valid parts only',()=>{
   assert.deepEqual(prefs.devices.map(d=>d.key),['iphone','saved-abc','custom'],'unknown keys (even prototype names) become custom');
   assert.equal(prefs.focus,0);assert.equal(prefs.frame,false);assert.equal(prefs.sync,false);assert.equal(prefs.zoom,'fit');assert.equal(prefs.shot,'full');
   assert.deepEqual(prefs.devices.map(d=>d.linked),[true,false,true],'devices stay linked unless explicitly unlinked');
-  assert.deepEqual(cleanPrefs(undefined),{devices:[{key:'iphone',width:393,height:852,linked:true}],focus:0,frame:true,sync:true,syncInput:false,zoom:'fit',shot:'screen'});
+  assert.deepEqual(cleanPrefs(undefined),{devices:[{key:'iphone',width:393,height:852,linked:true}],focus:0,agent:'desktop',frame:true,sync:true,syncInput:false,zoom:'fit',shot:'screen'});
+  assert.equal(cleanPrefs({agent:'android'}).agent,'android');assert.equal(cleanPrefs({agent:'ipad'}).agent,'desktop');
   assert.equal(cleanPrefs({syncInput:true}).syncInput,true);assert.equal(cleanPrefs({syncInput:'yes'}).syncInput,false,'click sync is opt-in: only an explicit true enables it');
   assert.equal(cleanPrefs({shot:'evil'}).shot,'screen');
   assert.equal(cleanPrefs({zoom:0.5}).zoom,0.5);
@@ -87,4 +88,19 @@ test('full-page strips cover the page once, one screen at a time',()=>{
   assert.deepEqual(strips(2000,800).map(s=>s.y),[0,800,1600]);
   assert.deepEqual(strips(2000,800).map(s=>[s.first,s.last]),[[true,false],[false,false],[false,true]]);
   assert.deepEqual(strips(0,800),[{y:0,first:true,last:true}]);
+});
+
+test('phone user agents and their header rule',()=>{
+  assert.deepEqual(AGENTS,['desktop','iphone','android']);
+  assert.equal(userAgent('desktop','153'),null);
+  assert.match(userAgent('iphone','153'),/^Mozilla\/5\.0 \(iPhone; CPU iPhone OS \d+_\d+ like Mac OS X\).* Mobile\/\w+ Safari\/604\.1$/);
+  assert.match(userAgent('android','153'),/Android 10; K\).*Chrome\/153\.0\.0\.0 Mobile Safari\/537\.36$/);
+  assert.deepEqual([ruleCount('desktop'),ruleCount('iphone'),ruleCount('android')],[2,3,3]);
+  assert.equal(framingRules(7,[1,2]).length,2,'desktop adds no header rule');
+  const [, , iphone]=framingRules(7,[1,2,3],'iphone','153');
+  assert.equal(iphone.id,3);
+  assert.deepEqual(iphone.action.requestHeaders.map(h=>[h.header,h.operation]),[['user-agent','set'],['sec-ch-ua','remove'],['sec-ch-ua-mobile','remove'],['sec-ch-ua-platform','remove']]);
+  const [, , android]=framingRules(7,[1,2,3],'android','153');
+  assert.deepEqual(android.action.requestHeaders.slice(1),[{header:'sec-ch-ua-mobile',operation:'set',value:'?1'},{header:'sec-ch-ua-platform',operation:'set',value:'"Android"'}]);
+  assert.deepEqual(android.condition,{tabIds:[7],excludedResourceTypes:['main_frame']});
 });

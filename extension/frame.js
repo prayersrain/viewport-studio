@@ -78,7 +78,16 @@
   }, true);
   function applyClick({ path }) {
     const node = find(path);
-    if (node instanceof HTMLElement && !node.closest('a[href]')) node.click();
+    if (!(node instanceof HTMLElement) || node.closest('a[href]')) return;
+    // Menus that open on pointer or mouse down never see a bare click(): replay the whole press.
+    const box = node.getBoundingClientRect();
+    const at = { bubbles: true, cancelable: true, composed: true, view: window, button: 0, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+    const pointer = { ...at, pointerId: 1, pointerType: 'mouse', isPrimary: true };
+    node.dispatchEvent(new PointerEvent('pointerdown', { ...pointer, buttons: 1 }));
+    node.dispatchEvent(new MouseEvent('mousedown', { ...at, buttons: 1 }));
+    node.dispatchEvent(new PointerEvent('pointerup', pointer));
+    node.dispatchEvent(new MouseEvent('mouseup', at));
+    node.click();
   }
   function applyInput({ path, value }) {
     const node = find(path);

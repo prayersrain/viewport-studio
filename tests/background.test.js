@@ -37,13 +37,13 @@ test('only the Studio page may open a session, and only after host access is gra
   const opened=await send('open',{url:'https://ignored.example/'});
   assert.equal(opened.ok,true);
   assert.equal(opened.value.url,'http://localhost:5173/booking','tracked URL wins over the query string');
-  assert.equal(registered.length,1);
-  assert.deepEqual(registered[0].matches,['http://*/*','https://*/*'],'frame script stays off file:// and other schemes');
-  assert.equal(registered[0].allFrames,true);assert.equal(registered[0].runAt,'document_start');
+  assert.deepEqual(registered.map(s=>s.id),['viewport-frame','viewport-agent']);
+  for(const script of registered){assert.deepEqual(script.matches,['http://*/*','https://*/*'],'scripts stay off file:// and other schemes');assert.equal(script.allFrames,true);assert.equal(script.runAt,'document_start');}
+  assert.equal(registered[1].world,'MAIN','the agent patch must be visible to page scripts');
   assert.equal(rulesFor(1).length,2);
   await send('open');
   assert.equal(rulesFor(1).length,2,'reopening replaces, never duplicates');
-  assert.equal(registered.length,1,'frame script registers once');
+  assert.equal(registered.length,2,'scripts register once');
 });
 
 test('Studio tracks the focused page; content scripts and bad URLs cannot',async()=>{
@@ -97,4 +97,24 @@ test('leaving Studio by address bar or closing the tab removes the rules',async(
   await chrome.tabs.onRemoved.listener(big);
   assert.equal(storage.sessions[big],undefined);
   assert.equal(rules.length,0);
+});
+
+test('user agent rule covers every device request in the Studio tab and can be switched back',async()=>{
+  await chrome.action.onClicked.listener({id:6,url:'https://example.com/'});
+  await send('open',{agent:'iphone'},studio(6));
+  let mine=rulesFor(6);
+  assert.equal(mine.length,3);
+  const ua=mine.find(r=>r.action.requestHeaders);
+  assert.deepEqual(ua.condition,{tabIds:[6],excludedResourceTypes:['main_frame']},'never the tab itself, never other tabs');
+  assert.match(ua.action.requestHeaders[0].value,/iPhone/);
+  assert.equal((await send('agent',{agent:'android'},studio(6))).ok,true);
+  mine=rulesFor(6);
+  assert.equal(mine.length,3);assert.match(mine.find(r=>r.action.requestHeaders).action.requestHeaders[0].value,/Android/);
+  assert.equal((await send('agent',{agent:'desktop'},studio(6))).ok,true);
+  assert.equal(rulesFor(6).length,2,"desktop leaves Chrome's own agent");
+  assert.equal((await send('agent',{agent:'<script>'},studio(6))).ok,false);
+  assert.equal((await send('open',{agent:'bogus'},studio(6))).ok,true);
+  assert.equal(rulesFor(6).length,2,'unknown agents fall back to desktop');
+  await chrome.tabs.onRemoved.listener(6);
+  assert.equal(rulesFor(6).length,0);
 });

@@ -9,7 +9,8 @@ Please report vulnerabilities privately through GitHub: **Security → Report a 
 ## In scope
 
 - Framing rules that apply outside a studio tab, or that survive after leaving the studio.
-- `frame.js` behavior on pages that are not directly inside the studio.
+- `frame.js` or `agent.js` behavior on pages that are not directly inside the studio.
+- The user-agent rule applying to requests outside the Studio tab.
 - Web pages or other extensions that can send commands to the studio or background worker.
 - Any way to exfiltrate data from pages shown in the studio.
 - Click and typing sync copying password or file fields, replaying synthetic (untrusted) events, or reaching pages outside the studio's own devices.

@@ -19,6 +19,13 @@ export const MAX_DEVICES = 4;
 // Framing, login cookies inside the frame and the frame script depend on it too.
 export const ACCESS = { origins: ['<all_urls>'] };
 export const FRAME_MATCHES = ['http://*/*', 'https://*/*'];
+// iPad Safari already identifies as a desktop Mac, so tablets use the desktop agent.
+export const AGENTS = ['desktop', 'iphone', 'android'];
+export function userAgent(agent, chromeMajor) {
+  if (agent === 'iphone') return 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1';
+  if (agent === 'android') return `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 Mobile Safari/537.36`;
+  return null;
+}
 export function webUrl(value) {
   const url = new URL(value);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw Error(t('errorUrl'));
@@ -51,7 +58,7 @@ export function cleanPrefs(value, saved = []) {
   });
   if (!devices.length) devices.push({ key: 'iphone', ...viewport(PRESETS.iphone), linked: true });
   const focus = Number.isInteger(value?.focus) && value.focus >= 0 && value.focus < devices.length ? value.focus : 0;
-  return { devices, focus, frame: value?.frame !== false, sync: value?.sync !== false, syncInput: value?.syncInput === true, zoom: ZOOM_STEPS.includes(value?.zoom) ? value.zoom : 'fit', shot: value?.shot === 'full' ? 'full' : 'screen' };
+  return { devices, focus, agent: AGENTS.includes(value?.agent) ? value.agent : 'desktop', frame: value?.frame !== false, sync: value?.sync !== false, syncInput: value?.syncInput === true, zoom: ZOOM_STEPS.includes(value?.zoom) ? value.zoom : 'fit', shot: value?.shot === 'full' ? 'full' : 'screen' };
 }
 
 // Outer size of a device in CSS px: viewport plus bezel and the status/browser bars.
@@ -94,13 +101,24 @@ export function strips(total, height) {
 
 // Only sub-frames inside one Studio tab lose their anti-framing headers.
 // Normal browsing, including the same site in other tabs, keeps them.
-export function framingRules(tabId, [xfo, csp]) {
+export const ruleCount = agent => agent === 'iphone' || agent === 'android' ? 3 : 2;
+export function framingRules(tabId, [xfo, csp, ua], agent = 'desktop', chromeMajor = '140') {
   const condition = { tabIds: [tabId], resourceTypes: ['sub_frame'] };
   const remove = header => ({ type: 'modifyHeaders', responseHeaders: [{ header, operation: 'remove' }] });
-  return [
+  const rules = [
     { id: xfo, priority: 1, action: remove('x-frame-options'), condition },
     // DNR cannot edit a single directive, so drop CSP only when it forbids framing.
     { id: csp, priority: 1, action: remove('content-security-policy'),
       condition: { ...condition, responseHeaders: [{ header: 'content-security-policy', values: ['*frame-ancestors*'] }] } },
   ];
+  if (ruleCount(agent) === 3) {
+    // Every request from the Studio tab's devices (not the tab's own page) carries the phone agent.
+    // Safari sends no client hints; Chrome on Android marks itself mobile.
+    const hints = agent === 'iphone'
+      ? ['sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform'].map(header => ({ header, operation: 'remove' }))
+      : [{ header: 'sec-ch-ua-mobile', operation: 'set', value: '?1' }, { header: 'sec-ch-ua-platform', operation: 'set', value: '"Android"' }];
+    rules.push({ id: ua, priority: 1, action: { type: 'modifyHeaders', requestHeaders: [{ header: 'user-agent', operation: 'set', value: userAgent(agent, chromeMajor) }, ...hints] },
+      condition: { tabIds: [tabId], excludedResourceTypes: ['main_frame'] } });
+  }
+  return rules;
 }
