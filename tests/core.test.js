@@ -76,7 +76,8 @@ test('stored preferences are rebuilt from valid parts only',()=>{
   assert.deepEqual(prefs.devices.map(d=>d.key),['iphone','saved-abc','custom'],'unknown keys (even prototype names) become custom');
   assert.equal(prefs.focus,0);assert.equal(prefs.frame,false);assert.equal(prefs.sync,false);assert.equal(prefs.zoom,'fit');assert.equal(prefs.shot,'full');
   assert.deepEqual(prefs.devices.map(d=>d.linked),[true,false,true],'devices stay linked unless explicitly unlinked');
-  assert.deepEqual(cleanPrefs(undefined),{devices:[{key:'iphone',width:393,height:852,linked:true}],focus:0,frame:true,sync:true,zoom:'fit',shot:'screen'});
+  assert.deepEqual(cleanPrefs(undefined),{devices:[{key:'iphone',width:393,height:852,linked:true}],focus:0,frame:true,sync:true,syncInput:false,zoom:'fit',shot:'screen'});
+  assert.equal(cleanPrefs({syncInput:true}).syncInput,true);assert.equal(cleanPrefs({syncInput:'yes'}).syncInput,false,'click sync is opt-in: only an explicit true enables it');
   assert.equal(cleanPrefs({shot:'evil'}).shot,'screen');
   assert.equal(cleanPrefs({zoom:0.5}).zoom,0.5);
 });

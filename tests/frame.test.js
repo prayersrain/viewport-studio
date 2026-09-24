@@ -145,3 +145,77 @@ test('full-page strips show fixed bars once and hide stuck headers, then restore
   assert.deepEqual([header.style.getPropertyValue('visibility'), header.style.getPropertyPriority('visibility')], ['visible', 'important'], 'original inline style restored');
   assert.deepEqual([shown(bottomBar), shown(sticky)], [true, true]);
 });
+
+// ---- Click and typing sync ----
+// A tiny DOM with real classes so frame.js's instanceof checks work inside the vm realm.
+function formDom() {
+  const code = `
+    class Element { constructor(tag, props = {}) { Object.assign(this, { tagName: tag.toUpperCase(), parentElement: null, children: [], id: '', clicks: 0, events: [] }, props); }
+      append(...nodes) { for (const node of nodes) { node.parentElement = this; this.children.push(node); } return this; }
+      matches(selector) { return selector === 'a[href]' ? this.tagName === 'A' && !!this.href : this.tagName === selector.toUpperCase(); }
+      closest(selector) { for (let node = this; node; node = node.parentElement) if (node.matches(selector)) return node; return null; }
+      click() { this.clicks++; } dispatchEvent(event) { this.events.push(event.type); } }
+    class HTMLElement extends Element {}
+    class HTMLInputElement extends HTMLElement { get value() { return this._value ?? ''; } set value(v) { this._value = 'set:' + v; } }
+    class HTMLTextAreaElement extends HTMLElement {} class HTMLSelectElement extends HTMLElement {}
+    class HTMLLabelElement extends HTMLElement { get control() { return this.children.find(c => c instanceof HTMLInputElement) ?? null; } }
+    ({ Element, HTMLElement, HTMLInputElement, HTMLTextAreaElement, HTMLSelectElement, HTMLLabelElement })`;
+  return code;
+}
+function runForm() {
+  const listeners = {}, sent = [];
+  const port = { onMessage: event(), onDisconnect: event(), postMessage: message => sent.push(message) };
+  const context = {
+    location: { href: 'https://site.example/', ancestorOrigins: ['chrome-extension://viewport'] }, name: 'viewport-a', innerHeight: 800, scrollX: 0, scrollY: 0,
+    CSS: { escape: value => value }, Event: class { constructor(type, init) { this.type = type; this.bubbles = init?.bubbles; } },
+    chrome: { runtime: { getURL: path => 'chrome-extension://viewport/' + path, connect: () => port } },
+    setInterval: () => 1, clearInterval: () => {}, requestAnimationFrame: () => {}, performance: { now: () => 0 }, scrollTo() {},
+  };
+  context.window = context;
+  vm.createContext(context);
+  const dom = vm.runInContext(formDom(), context);
+  Object.assign(context, dom);
+  const html = new dom.Element('html'), body = new dom.Element('body');
+  html.append(body);
+  context.document = { head: null, documentElement: html, body, scrollingElement: { scrollHeight: 800 }, createElement: () => ({}),
+    addEventListener: (type, fn) => { listeners[type] = fn; }, querySelector: selector => context.lookup?.[selector] ?? null };
+  html.append = node => node; // style tag
+  vm.runInContext(source, context);
+  const fire = (type, target, extra = {}) => listeners[type]({ target, isTrusted: true, button: 0, ...extra });
+  const shared = () => JSON.parse(JSON.stringify(sent.filter(m => m.type === 'click' || m.type === 'input')));
+  return { dom, body, fire, shared, port, context };
+}
+
+test('clicks and typing are shared only when enabled, only from real users, never links or passwords', () => {
+  const { dom, body, fire, shared, port } = runForm();
+  const button = new dom.HTMLElement('button', { id: 'more' }), field = new dom.HTMLInputElement('input', { id: 'name', type: 'text' });
+  const secret = new dom.HTMLInputElement('input', { id: 'pw', type: 'password' }), link = new dom.Element('a', { href: '/next' }), inLink = new dom.HTMLElement('span');
+  const label = new dom.HTMLLabelElement('label'), box = new dom.HTMLInputElement('input', { id: 'oat', type: 'checkbox' }), text = new dom.HTMLElement('span');
+  link.append(inLink); label.append(box, text); body.append(button, field, secret, link, label);
+  fire('click', button); field._value = 'Ana'; fire('input', field);
+  assert.deepEqual(shared(), [], 'off by default');
+  port.onMessage.fire({ type: 'sync', scroll: true, input: true });
+  fire('click', button); fire('click', button, { isTrusted: false }); fire('click', button, { button: 2 });
+  fire('click', inLink); fire('click', text); fire('click', box); fire('click', secret);
+  fire('input', field); fire('input', secret); fire('input', field, { isTrusted: false });
+  assert.deepEqual(shared(), [
+    { slot: 'viewport-a', type: 'click', path: '#more' },
+    { slot: 'viewport-a', type: 'click', path: '#oat' },
+    { slot: 'viewport-a', type: 'input', path: '#name', value: 'Ana' },
+  ], 'label text, links, passwords, right clicks and synthetic events are not shared');
+});
+
+test('replayed clicks and typing reach the matching element through framework-visible events', () => {
+  const { dom, port, context } = runForm();
+  const button = new dom.HTMLElement('button'), field = new dom.HTMLInputElement('input', { type: 'email' }), secret = new dom.HTMLInputElement('input', { type: 'password' });
+  const link = new dom.Element('a', { href: '/x' }), inLink = new dom.HTMLElement('span');
+  link.append(inLink);
+  context.lookup = { '#b': button, '#f': field, '#p': secret, '#l': inLink };
+  port.onMessage.fire({ type: 'click', path: '#b' }); port.onMessage.fire({ type: 'click', path: '#l' }); port.onMessage.fire({ type: 'click', path: '#missing' });
+  assert.deepEqual([button.clicks, inLink.clicks], [1, 0], 'links are left to navigation sync');
+  port.onMessage.fire({ type: 'input', path: '#f', value: 'ana@example.com' });
+  assert.equal(field._value, 'set:ana@example.com', 'value goes through the prototype setter');
+  assert.deepEqual([...field.events], ['input', 'change']);
+  port.onMessage.fire({ type: 'input', path: '#p', value: 'hunter2' });
+  assert.equal(secret._value, undefined, 'a password field is never filled from another device');
+});

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "minimum_chrome_version": "128",
@@ -9,6 +9,7 @@
   "permissions": ["activeTab", "storage", "scripting", "declarativeNetRequestWithHostAccess"],
   "optional_host_permissions": ["<all_urls>"],
   "action": { "default_title": "__MSG_actionTitle__", "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png" } },
+  "commands": { "_execute_action": { "suggested_key": { "default": "Alt+Shift+V" } } },
   "background": { "service_worker": "background.js", "type": "module" },
   "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'" }
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Keyboard shortcuts in the studio (press `?` for the list) and a global `Alt+Shift+V` to open or close Viewport from any tab.
+- Dark theme. Follows the system by default; the header button switches between auto, light and dark without a flash on load.
+- Experimental click and typing sync between linked devices, off by default. Only real user actions are shared; links, passwords and files are not.
+- Device captions no longer widen a device past the fitted layout, so three or four devices always fit.
+- Screenshots fail immediately when the Viewport tab is in the background instead of waiting for it.
+- Animated demo at the top of the README, and an order form in `docs/demo.html` for testing click and typing sync.
+
 ## 0.5.0
 
 - Full-page screenshots of the selected device. The page scrolls one screen at a time; fixed top bars and stuck headers appear once at the top, and fixed bottom bars once at the bottom. The reader's scroll position is restored afterwards.

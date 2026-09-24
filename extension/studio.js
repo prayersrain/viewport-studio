@@ -6,7 +6,7 @@ const GAP = 28; // screen px between devices; must match .phone-space gap
 const GROUPS = { phone: 'groupPhone', tablet: 'groupTablet', desktop: 'groupDesktop', saved: 'groupSaved' };
 const params = new URLSearchParams(location.search);
 // Device layout lives in storage.local (survives restarts); the page URL lives in the background session.
-const state = { focus: 0, frame: true, sync: true, zoom: 'fit', shot: 'screen' };
+const state = { focus: 0, frame: true, sync: true, syncInput: false, zoom: 'fit', shot: 'screen' };
 let slots = [], saved = [], ready = false, tabId, scale = 1, siteUrl = '', capturing = false, cutShort = false, slotCount = 0;
 
 localize();
@@ -26,7 +26,7 @@ const frameOf = slot => describe(slot.key).frame || 'generic';
 // A saved device keeps its name when its size is typed in again.
 const keyFor = size => presetFor(size) !== 'custom' ? presetFor(size) : saved.find(d => (d.width === size.width && d.height === size.height) || (d.width === size.height && d.height === size.width))?.id || 'custom';
 function storePrefs() {
-  const prefs = { devices: slots.map(({ key, size, linked }) => ({ key, ...size, linked })), focus: state.focus, frame: state.frame, sync: state.sync, zoom: state.zoom, shot: state.shot };
+  const prefs = { devices: slots.map(({ key, size, linked }) => ({ key, ...size, linked })), focus: state.focus, frame: state.frame, sync: state.sync, syncInput: state.syncInput, zoom: state.zoom, shot: state.shot };
   globalThis.chrome?.storage?.local.set({ prefs }).catch(() => {});
 }
 
@@ -93,6 +93,8 @@ function geometry(bounds) {
   } else scale = state.zoom;
   slots.forEach((slot, index) => {
     const box = boxes[index], kind = frameOf(slot);
+    // The slot is exactly as wide as the scaled device; its caption truncates instead of widening it.
+    slot.element.style.width = box.width * scale + 'px';
     Object.assign(slot.body.style, { width: box.width * scale + 'px', height: box.height * scale + 'px' });
     Object.assign(slot.phone.style, { width: box.width + 'px', height: box.height + 'px', transform: `scale(${scale})` });
     slot.phone.classList.toggle('landscape', slot.size.width > slot.size.height);
@@ -104,7 +106,8 @@ function geometry(bounds) {
     slot.element.classList.toggle('unlinked', !slot.linked);
     const link = slot.element.querySelector('.slot-link');
     link.setAttribute('aria-pressed', String(slot.linked)); link.title = t(slot.linked ? 'linkOn' : 'linkOff'); link.setAttribute('aria-label', link.title);
-    slot.element.querySelector('.slot-name').textContent = `${describe(slot.key).name} · ${slot.size.width}×${slot.size.height}`;
+    const name = slot.element.querySelector('.slot-name');
+    name.textContent = name.title = `${describe(slot.key).name} · ${slot.size.width}×${slot.size.height}`;
   });
   const slot = focused(), landscape = slot.size.width > slot.size.height;
   $('#device-title').textContent = describe(slot.key).name;
@@ -115,6 +118,7 @@ function geometry(bounds) {
   $('#canvas-caption').textContent = t(state.frame?'frameOn':'contentOnly');
   $('#save-device').hidden = slot.key !== 'custom';
   $('#sync').disabled = !multi;
+  $('#sync-input').disabled = !multi || !state.sync;
   markDevices();
 }
 function markDevices() {
@@ -218,7 +222,8 @@ function reported(slot, value) {
 }
 const post = (slot, message) => { try { slot.port?.postMessage(message); } catch { slot.port = null; } };
 const shares = slot => state.sync && slot.linked && slots.filter(other => other.linked).length > 1;
-function syncFrames() { for (const slot of slots) post(slot, { type: 'sync', scroll: shares(slot) }); }
+const syncMessage = slot => ({ type: 'sync', scroll: shares(slot), input: shares(slot) && state.syncInput });
+function syncFrames() { for (const slot of slots) post(slot, syncMessage(slot)); }
 // Request/reply over a device's port (measure and scroll the page for full-page screenshots).
 const pending = new Map();
 let asked = 0;
@@ -238,12 +243,17 @@ globalThis.chrome?.runtime?.onConnect?.addListener(port => {
     // First report maps the frame to its device by iframe name; later documents by frameId.
     slot ||= slots.find(s => s.frameId === sender.frameId) || slots.find(s => s.frameId === null && s.id === message.slot);
     if (!slot || !slots.includes(slot)) return;
-    if (slot.port !== port) { slot.frameId = sender.frameId; slot.port = port; post(slot, { type: 'sync', scroll: shares(slot) }); }
+    if (slot.port !== port) { slot.frameId = sender.frameId; slot.port = port; post(slot, syncMessage(slot)); }
     if (message.type === 'url') reported(slot, message.url);
     if (message.type === 'reply' && pending.has(message.id)) { pending.get(message.id)(message); pending.delete(message.id); }
     if (message.type === 'scroll' && shares(slot) && typeof message.path === 'string' && message.path.length < 2000) {
       const scroll = { type: 'scroll', path: message.path, x: Number(message.x) || 0, y: Number(message.y) || 0 };
       for (const other of slots) if (other !== slot && other.linked) post(other, scroll);
+    }
+    // Clicks and typing replay by element path; the page never receives another device's password or files.
+    if ((message.type === 'click' || message.type === 'input') && shares(slot) && state.syncInput && typeof message.path === 'string' && message.path.length < 2000) {
+      const action = message.type === 'click' ? { type: 'click', path: message.path } : { type: 'input', path: message.path, value: String(message.value ?? '').slice(0, 10000) };
+      for (const other of slots) if (other !== slot && other.linked) post(other, action);
     }
   });
   port.onDisconnect.addListener(() => { if (slot?.port === port) slot.port = null; });
@@ -313,6 +323,8 @@ async function captureFull(slot) {
 async function capture() {
   if (!ready) throw Error(t('errorGrantFirst'));
   if (capturing) throw Error(t('errorCapture'));
+  // Background tabs pause animation frames; fail now instead of waiting to be brought back.
+  if (!(await chrome.tabs.get(tabId)).active) throw Error(t('errorCaptureHidden'));
   capturing = true; cutShort = false;
   document.body.classList.add('capturing');
   try { return state.shot === 'full' ? await captureFull(focused()) : await captureScreen(); }
@@ -328,35 +340,42 @@ function shotName() {
   return `viewport-${what}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
 }
 const shotDone = message => status(cutShort ? `${message} ${t('fullPageCut')}` : message);
-$('#shot-save').onclick = async () => {
+async function saveShot() {
   try {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(await capture()); link.download = shotName(); link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 10000);
     shotDone(t('screenshotSaved', link.download));
   } catch (e) { error(e); }
-};
+}
+$('#shot-save').onclick = saveShot;
 // The clipboard write starts inside the click; ClipboardItem waits for the capture promise.
-$('#shot-copy').onclick = () => navigator.clipboard.write([new ClipboardItem({ 'image/png': capture() })]).then(() => shotDone(t('screenshotCopied')), error);
+const copyShot = () => navigator.clipboard.write([new ClipboardItem({ 'image/png': capture() })]).then(() => shotDone(t('screenshotCopied')), error);
+$('#shot-copy').onclick = copyShot;
 function showShot() {
   $('#shot-mode').querySelectorAll('button').forEach(b => { const on = b.dataset.mode === state.shot; b.classList.toggle('chosen', on); b.setAttribute('aria-pressed', String(on)); });
   const full = state.shot === 'full';
   $('#shot-note').textContent = t(full ? 'fullPageNote' : 'screenshotNote');
 }
-$('#shot-mode').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.shot = b.dataset.mode; showShot(); storePrefs(); };
+function setShot(mode) { state.shot = mode; showShot(); storePrefs(); }
+$('#shot-mode').onclick = e => { const b = e.target.closest('button'); if (b) setShot(b.dataset.mode); };
 
 // ---- Controls ----
-$('#rotate-btn').onclick = () => { const { width, height } = focused().size; resizeFocused({ width: height, height: width }, focused().key); };
+function rotate() { const { width, height } = focused().size; resizeFocused({ width: height, height: width }, focused().key); }
+$('#rotate-btn').onclick = rotate;
 for (const id of ['width', 'height']) $('#' + id).onchange = () => resizeFocused({ width: Number($('#width').value), height: Number($('#height').value) });
 $('#custom').onclick = () => { $('#width').focus(); $('#width').select(); };
 $('#save-device-btn').onclick = saveDevice;
 $('#device-name').onkeydown = e => { if (e.key === 'Enter') saveDevice(); };
-$('#zoom-in').onclick = () => { state.zoom = stepZoom(scale, 1); geometry(); storePrefs(); };
-$('#zoom-out').onclick = () => { state.zoom = stepZoom(scale, -1); geometry(); storePrefs(); };
-$('#zoom').onclick = () => { state.zoom = state.zoom === 'fit' ? 1 : 'fit'; geometry(); storePrefs(); };
+function setZoom(zoom) { state.zoom = zoom; geometry(); storePrefs(); }
+$('#zoom-in').onclick = () => setZoom(stepZoom(scale, 1));
+$('#zoom-out').onclick = () => setZoom(stepZoom(scale, -1));
+$('#zoom').onclick = () => setZoom(state.zoom === 'fit' ? 1 : 'fit');
 function showFrame() { $('#frame-segment').querySelectorAll('button').forEach(b => { const on = (b.dataset.frame === 'on') === state.frame; b.classList.toggle('chosen', on); b.setAttribute('aria-pressed', String(on)); }); }
-$('#frame-segment').onclick = e => { const b = e.target.closest('button'); if (!b) return; state.frame = b.dataset.frame === 'on'; showFrame(); geometry(); storePrefs(); };
-$('#sync').onchange = () => { state.sync = $('#sync').checked; syncFrames(); storePrefs(); };
+function setFrame(on) { state.frame = on; showFrame(); geometry(); storePrefs(); }
+$('#frame-segment').onclick = e => { const b = e.target.closest('button'); if (b) setFrame(b.dataset.frame === 'on'); };
+$('#sync').onchange = () => { state.sync = $('#sync').checked; syncFrames(); geometry(); storePrefs(); };
+$('#sync-input').onchange = () => { state.syncInput = $('#sync-input').checked; syncFrames(); storePrefs(); };
 function navigate() {
   try { if (!ready) throw Error(t('errorGrantFirst')); loadAll(webUrl($('.address input').value)); status(t('loading')); } catch (e) { error(e); }
 }
@@ -370,6 +389,47 @@ $('#grant').onclick = async () => {
 observePreviewWidth($('.canvas'), () => geometry());
 let resizeQueued = false;
 addEventListener('resize', () => { if (resizeQueued) return; resizeQueued = true; requestAnimationFrame(() => { resizeQueued = false; if (!capturing) geometry(); }); });
+
+// ---- Theme ----
+// Kept in localStorage so theme.js can apply it before the first paint.
+const THEMES = ['auto', 'light', 'dark'];
+function readTheme() { try { return localStorage.getItem('viewport-theme') || 'auto'; } catch { return 'auto'; } }
+function showTheme() {
+  const theme = readTheme(), label = t({ auto: 'themeAuto', light: 'themeLight', dark: 'themeDark' }[theme] || 'themeAuto');
+  if (theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme;
+  $('#theme').title = label; $('#theme').setAttribute('aria-label', label);
+}
+function cycleTheme() {
+  const next = THEMES[(THEMES.indexOf(readTheme()) + 1) % THEMES.length];
+  try { localStorage.setItem('viewport-theme', next); } catch { /* cannot persist; still apply */ }
+  showTheme();
+}
+$('#theme').onclick = cycleTheme;
+
+// ---- Keyboard shortcuts ----
+// Keys typed inside a device go to the website, so these work only while Studio has focus.
+const help = () => { if (!$('#shortcuts').open) $('#shortcuts').showModal(); };
+$('#help-btn').onclick = help;
+function toggleLink() { const slot = focused(); if (slots.length < 2) return; slot.linked = !slot.linked; geometry(); storePrefs(); syncFrames(); }
+const shortcuts = {
+  '?': help, '/': () => { $('.address input').focus(); $('.address input').select(); },
+  r: rotate, '+': () => setZoom(stepZoom(scale, 1)), '=': () => setZoom(stepZoom(scale, 1)), '-': () => setZoom(stepZoom(scale, -1)),
+  0: () => setZoom(state.zoom === 'fit' ? 1 : 'fit'), f: () => setFrame(!state.frame), l: toggleLink,
+  s: saveShot, c: copyShot, p: () => setShot(state.shot === 'full' ? 'screen' : 'full'), t: cycleTheme,
+};
+addEventListener('keydown', event => {
+  if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.repeat) return;
+  // A just-closed dialog can keep focus for a frame; only an open one owns the keyboard.
+  if (event.target.closest?.('dialog[open]')) return;
+  if (event.target.closest?.('input, textarea, select, [contenteditable]')) {
+    if (event.key === 'Escape') event.target.blur();
+    return;
+  }
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  const action = /^[1-4]$/.test(key) ? () => slots[key - 1] && focusSlot(slots[key - 1]) : shortcuts[key];
+  if (!action) return;
+  event.preventDefault(); action();
+});
 
 // ---- Start ----
 async function start() {
@@ -392,10 +452,10 @@ async function init() {
   const stored = (await globalThis.chrome?.storage?.local.get(['prefs', 'savedDevices']).catch(() => null)) || {};
   saved = cleanSaved(stored.savedDevices);
   const prefs = cleanPrefs(stored.prefs, saved);
-  Object.assign(state, { focus: prefs.focus, frame: prefs.frame, sync: prefs.sync, zoom: prefs.zoom, shot: prefs.shot });
+  Object.assign(state, { focus: prefs.focus, frame: prefs.frame, sync: prefs.sync, syncInput: prefs.syncInput, zoom: prefs.zoom, shot: prefs.shot });
   slots = prefs.devices.map(createSlot);
   $('#stage').append(...slots.map(slot => slot.element));
-  $('#sync').checked = state.sync; showFrame(); showShot(); renderDevices(); geometry();
+  $('#sync').checked = state.sync; $('#sync-input').checked = state.syncInput; showFrame(); showShot(); showTheme(); renderDevices(); geometry();
   await start();
 }
 init().catch(e => { for (const slot of slots) overlay(slot, e.message); error(e); });

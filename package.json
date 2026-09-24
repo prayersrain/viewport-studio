@@ -1,6 +1,6 @@
 {
   "name": "viewport-mobile-studio",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Free, open-source Chrome extension for previewing websites at phone sizes.",
   "private": true,
   "license": "MIT",
@@ -10,6 +10,6 @@
   },
   "scripts": {
     "test": "node --test \"tests/*.test.js\"",
-    "check": "node --check extension/background.js && node --check extension/studio.js && node --check extension/frame.js && node --check extension/i18n.js"
+    "check": "node --check extension/background.js && node --check extension/studio.js && node --check extension/frame.js && node --check extension/i18n.js && node --check extension/theme.js"
   }
 }

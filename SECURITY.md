@@ -12,6 +12,7 @@ Please report vulnerabilities privately through GitHub: **Security → Report a 
 - `frame.js` behavior on pages that are not directly inside the studio.
 - Web pages or other extensions that can send commands to the studio or background worker.
 - Any way to exfiltrate data from pages shown in the studio.
+- Click and typing sync copying password or file fields, replaying synthetic (untrusted) events, or reaching pages outside the studio's own devices.
 
 ## Known trade-offs (not vulnerabilities)
 

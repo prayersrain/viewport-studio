@@ -4,7 +4,7 @@ Extension Chrome gratis dan open source untuk melihat website dalam ukuran HP di
 
 [English](README.md)
 
-![Studio Viewport menampilkan situs demo di iPhone, HP Android, dan iPad secara berdampingan](docs/images/studio.png)
+![Viewport menambahkan iPad dan HP Android di samping iPhone, men-scroll ketiganya bersamaan, lalu beralih ke tema gelap](docs/images/demo.webp)
 
 - **Tanpa banner debugger.** Website dimuat di iframe asli, jadi Chrome tidak menampilkan "started debugging this browser".
 - **Satu tab.** Ikon di toolbar mengubah tab yang sedang dibuka menjadi studio dan mengembalikannya lagi. Tidak ada tab tambahan atau jendela popup.
@@ -14,7 +14,16 @@ Extension Chrome gratis dan open source untuk melihat website dalam ukuran HP di
 - **Screenshot.** Simpan PNG atau salin ke clipboard, dengan atau tanpa bingkai. **Halaman penuh** menangkap halaman dari atas sampai bawah; header yang menempel dan bar fixed hanya muncul sekali.
 - **Daftar device.** Sepuluh preset HP, tablet, dan desktop, plus ukuran custom yang bisa diberi nama dan disimpan.
 - **Zoom.** Muat semua di layar (fit) atau tampilkan ukuran asli (100%).
+- **Shortcut keyboard.** Tekan `?` di studio untuk melihat daftarnya. `Alt+Shift+V` membuka atau menutup Viewport dari tab mana pun.
+- **Tema gelap.** Mengikuti sistem, atau pilih terang/gelap lewat tombol di header.
+- **Sinkron klik dan ketikan (eksperimental).** Isi form atau buka menu sekali, device lain ikut.
 - **Privat.** Tidak ada koneksi jaringan, analytics, kode jarak jauh, atau build step.
+
+## Tangkapan layar
+
+| Studio dengan tiga device | Screenshot halaman penuh (HP) |
+|---|---|
+| <img src="docs/images/studio.png" width="620" alt="Studio Viewport dengan iPhone, HP Android, dan iPad yang menampilkan halaman demo Lumen Coffee"> | <img src="docs/images/full-page.png" width="140" alt="Screenshot halaman penuh halaman demo selebar iPhone, dengan header sekali di atas dan bar order sekali di bawah"> |
 
 ## Pasang
 
@@ -31,7 +40,7 @@ Butuh Chrome 128 atau lebih baru. Browser berbasis Chromium seperti Edge juga se
 3. Ketik alamat lain di kolom alamat studio, atau navigasi langsung di dalam HP.
 4. Klik device di daftar untuk mengganti device yang dipilih, atau klik **＋** di sebelahnya untuk menambahkannya berdampingan. Klik nama device di atas HP untuk memilihnya, **×** untuk menghapusnya, atau ikon tautan untuk melepasnya dari sinkron.
 5. Ketik lebar dan tinggi untuk membuat ukuran custom, lalu beri nama agar tersimpan di **Tersimpan**.
-6. Klik ikon lagi atau **Keluar dari Viewport** untuk mengembalikan tab ke halaman terakhir.
+6. Klik ikon lagi, tekan `Alt+Shift+V`, atau pakai **Keluar dari Viewport** untuk mengembalikan tab ke halaman terakhir.
 
 ## Cara kerja
 
@@ -50,6 +59,7 @@ Penjelasan tiap izin ada di [README.md](README.md#how-it-works).
 - Framebuster yang dijalankan setelah klik pengguna bisa mengambil alih tab.
 - Resolusi screenshot bergantung pada layar. Perangkat ditampilkan sendirian sesaat dalam ukuran terbesar yang muat di jendela, dan tab Viewport harus tetap di depan sampai screenshot selesai.
 - Screenshot halaman penuh men-scroll halaman satu layar demi satu layar (sekitar 0,6 detik per layar). Animasi yang muncul saat scroll bisa terlihat berbeda, dan halaman yang sangat panjang dipotong di 32.000 piksel gambar.
+- Sinkron klik dan ketikan memutar ulang aksi berdasarkan posisi elemen di halaman, sama seperti sinkron scroll di dalam halaman. Link diserahkan ke sinkron navigasi, dan kolom password maupun file tidak pernah disalin. Widget yang hanya bereaksi pada event pointer atau mouse-down mungkin tidak merespons klik yang diputar ulang.
 - Area scroll di dalam halaman dicocokkan antar-device berdasarkan posisinya di struktur halaman. Kalau markup-nya berbeda per ukuran layar, area itu tidak ikut sinkron. Navigasi yang disinkronkan memuat ulang halaman di perangkat lain, termasuk perpindahan route di single-page app.
 
 Rencana fitur ada di [ROADMAP.md](ROADMAP.md).

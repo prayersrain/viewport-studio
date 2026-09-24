@@ -11,7 +11,7 @@
   // A port goes only to extension pages, so the site cannot forge these messages.
   // Studio names each iframe; the name is read before page scripts can change it.
   const port = chrome.runtime.connect({ name: 'viewport-frame' }), slot = window.name;
-  let open = true, reported = '', shareScroll = false, quietUntil = 0, shooting = null;
+  let open = true, reported = '', shareScroll = false, shareInput = false, quietUntil = 0, shooting = null;
   const post = message => { if (open) try { port.postMessage({ slot, ...message }); } catch { open = false; } };
   // Studio cannot read a cross-origin frame's URL, so the page reports it.
   const report = () => { if (location.href !== reported) post({ type: 'url', url: reported = location.href }); };
@@ -58,6 +58,37 @@
     node?.scrollTo({ left: clamp(x) * (node.scrollWidth - node.clientWidth), top: clamp(y) * (node.scrollHeight - node.clientHeight), behavior: 'instant' });
   }
 
+  // ---- Click and typing sync (experimental, off by default) ----
+  // Only real user actions are shared (isTrusted), so replayed ones never echo back.
+  // Links are left to navigation sync. Passwords and files are never copied.
+  const find = path => { try { return document.querySelector(path); } catch { return null; } };
+  const typed = node => node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement ||
+    (node instanceof HTMLInputElement && !['password', 'file', 'checkbox', 'radio', 'hidden', 'submit', 'button', 'reset', 'image'].includes(node.type));
+  document.addEventListener('click', event => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!shareInput || !event.isTrusted || event.button !== 0 || shooting || !target) return;
+    // A label click also clicks its control; share only the control's click so toggles happen once.
+    const control = target.closest('label')?.control;
+    if (target.closest('a[href]') || (control && control !== target)) return;
+    if (target instanceof HTMLInputElement && target.type === 'password') return;
+    post({ type: 'click', path: pathOf(target) });
+  }, true);
+  document.addEventListener('input', event => {
+    if (shareInput && event.isTrusted && !shooting && typed(event.target)) post({ type: 'input', path: pathOf(event.target), value: event.target.value });
+  }, true);
+  function applyClick({ path }) {
+    const node = find(path);
+    if (node instanceof HTMLElement && !node.closest('a[href]')) node.click();
+  }
+  function applyInput({ path, value }) {
+    const node = find(path);
+    if (!typed(node) || typeof value !== 'string') return;
+    // Set through the prototype and fire the events frameworks listen for.
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node), 'value')?.set?.call(node, value);
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+    node.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   // ---- Full-page screenshot ----
   // Studio captures one screen at a time while this page scrolls underneath.
   // Fixed bars and stuck headers are shown once, not in every strip.
@@ -100,8 +131,10 @@
   }
 
   port.onMessage.addListener(async message => {
-    if (message.type === 'sync') shareScroll = message.scroll === true;
+    if (message.type === 'sync') { shareScroll = message.scroll === true; shareInput = message.input === true; }
     if (message.type === 'scroll') applyScroll(message);
+    if (message.type === 'click') applyClick(message);
+    if (message.type === 'input') applyInput(message);
     // Requests carry an id; Studio waits for the matching reply.
     const reply = data => post({ type: 'reply', id: message.id, ...data });
     if (message.type === 'measure') reply({ height: innerHeight, scrollHeight: document.scrollingElement?.scrollHeight ?? innerHeight });

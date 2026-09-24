@@ -17,6 +17,8 @@ These keep the project small, safe and trustworthy. A pull request that breaks o
 - **Never use `chrome.debugger` in the default mode.** It brings back the debugging banner. A future opt-in "accurate mode" must stay opt-in.
 - **Keep header changes scoped** to sub-frames in studio tabs (`tabIds` + `resourceTypes: ['sub_frame']`). Clean them up when the studio goes away.
 - **`frame.js` must stay inert outside the studio.** It runs on every http(s) frame and must exit immediately unless its direct parent is the studio.
+- **All UI colors go through the theme tokens** at the top of `studio.css`, so light and dark stay in step. Phone hardware and the website surface keep fixed colors.
+- **Click and typing sync never copies password or file fields,** and only shares trusted user events.
 - **All UI text goes through i18n.** Add each new key to `_locales/en` and `_locales/id`; the tests fail if a key is missing. Use `data-i18n` in HTML and `t('key')` in scripts.
 - **Match the existing style:** plain ES modules, small functions and short comments that explain why.
 
@@ -32,8 +34,11 @@ Unit tests use mocked Chrome APIs, so please also check these in a real browser.
 6. **＋** adds a device. Clicking a link or scrolling in one device follows in the others while sync is on.
 7. **Save PNG** downloads the devices without the studio UI. **Copy** puts the same image on the clipboard. **Full page** on the demo shows the header once at the top and the orange order bar once at the bottom.
 8. The link icon above a device takes it out of sync: it stays on its page while the others navigate.
-9. Reload the studio. Your devices, zoom and saved sizes are still there.
-10. Clicking the icon again returns the tab to the last page. That site still refuses to be framed in a normal tab.
+9. With **Also sync clicks and typing** on, typing a name, changing the size and ticking **Oat milk** in the demo's order form updates the other devices. **Show pickup times** opens in all of them.
+10. `?` lists the shortcuts; `R`, `0`, `F`, `T` and `1`–`4` work after clicking outside the phone. `Alt+Shift+V` toggles Viewport from a normal tab.
+11. The header's theme button cycles auto, light and dark, and a forced theme survives a reload.
+12. Reload the studio. Your devices, zoom and saved sizes are still there.
+13. Clicking the icon again returns the tab to the last page. That site still refuses to be framed in a normal tab.
 
 ## Issues and pull requests
 

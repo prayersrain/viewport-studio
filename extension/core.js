@@ -51,7 +51,7 @@ export function cleanPrefs(value, saved = []) {
   });
   if (!devices.length) devices.push({ key: 'iphone', ...viewport(PRESETS.iphone), linked: true });
   const focus = Number.isInteger(value?.focus) && value.focus >= 0 && value.focus < devices.length ? value.focus : 0;
-  return { devices, focus, frame: value?.frame !== false, sync: value?.sync !== false, zoom: ZOOM_STEPS.includes(value?.zoom) ? value.zoom : 'fit', shot: value?.shot === 'full' ? 'full' : 'screen' };
+  return { devices, focus, frame: value?.frame !== false, sync: value?.sync !== false, syncInput: value?.syncInput === true, zoom: ZOOM_STEPS.includes(value?.zoom) ? value.zoom : 'fit', shot: value?.shot === 'full' ? 'full' : 'screen' };
 }
 
 // Outer size of a device in CSS px: viewport plus bezel and the status/browser bars.

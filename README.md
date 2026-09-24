@@ -4,7 +4,7 @@ A free, open-source Chrome extension for previewing websites at phone sizes insi
 
 [Bahasa Indonesia](README.id.md)
 
-![Viewport studio showing a demo site on an iPhone, an Android phone and an iPad side by side](docs/images/studio.png)
+![Viewport adding an iPad and an Android phone next to an iPhone, scrolling all three in sync, then switching to the dark theme](docs/images/demo.webp)
 
 - **No debugger banner.** The site loads in a real iframe, so Chrome does not show "started debugging this browser".
 - **One tab.** The toolbar icon turns the current tab into the studio and back again. It does not open extra tabs or popup windows.
@@ -14,7 +14,16 @@ A free, open-source Chrome extension for previewing websites at phone sizes insi
 - **Screenshots.** Save a PNG or copy it to the clipboard, with or without the device frame. **Full page** captures the whole page from top to bottom and shows sticky headers and fixed bars only once.
 - **Device library.** Ten phone, tablet and desktop presets, plus custom sizes you name and keep.
 - **Zoom.** Fit everything on screen, or view devices at true size (100%).
+- **Keyboard shortcuts.** Press `?` in the studio for the list. `Alt+Shift+V` opens or closes Viewport from any tab.
+- **Dark theme.** Follows your system, or pick light or dark with the button in the header.
+- **Click and typing sync (experimental).** Fill a form or open a menu once and the other devices follow.
 - **Private by design.** No network calls, analytics, remote code or build step.
+
+## Screenshots
+
+| Studio with three devices | Full-page capture (phone) |
+|---|---|
+| <img src="docs/images/studio.png" width="620" alt="Viewport studio with an iPhone, an Android phone and an iPad showing the Lumen Coffee demo page"> | <img src="docs/images/full-page.png" width="140" alt="Full-page screenshot of the demo page at iPhone width, with the header once at the top and the order bar once at the bottom"> |
 
 ## Install
 
@@ -31,7 +40,7 @@ Requires Chrome 128 or newer. Chromium-based browsers such as Edge should also w
 3. Type other addresses in the studio's address bar, or navigate inside the phone.
 4. Click a device in the list to switch the selected device, or click **＋** next to it to add it alongside. Click a device's name above it to select it, **×** to remove it, or the link icon to take it out of sync.
 5. Type a width and height to make a custom size, then name it to save it under **Saved**.
-6. Click the icon again, or **Exit Viewport**, to return the tab to the last page you visited.
+6. Click the icon again, press `Alt+Shift+V`, or use **Exit Viewport** to return the tab to the last page you visited.
 
 ## How it works
 
@@ -56,6 +65,7 @@ A small content script (`frame.js`) runs only when its direct parent is the stud
 - A framebusting script that runs after a user click can take over the tab.
 - Screenshot resolution depends on your screen. Devices are briefly shown alone at the largest size that fits the window, and the Viewport tab must stay in front until the screenshot is done.
 - Full-page screenshots scroll the page one screen at a time (about 0.6 seconds per screen). Animations that play on scroll can look different from a normal visit, and extremely long pages are cut at 32,000 image pixels.
+- Click and typing sync replays actions by element position in the page, like inner scroll sync. Links are left to navigation sync, and password and file fields are never copied. Widgets that react only to pointer or mouse-down events may not respond to a replayed click.
 - Inner scroll areas are matched between devices by their position in the page. If a layout builds different markup per screen size, that area is not synced. A synced navigation fully loads the page in the other devices, including single-page-app route changes.
 
 See [ROADMAP.md](ROADMAP.md) for planned features.

@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lumen Coffee — Viewport demo page</title>
 <!-- Fictional site for README screenshots and manual testing: sticky header, inner horizontal
-     scroller (#rail), responsive grid, and a phone-only fixed order bar (full-page capture). -->
+     scroller (#rail), responsive grid, a form for click/typing sync, and a phone-only fixed order bar
+     (full-page capture). -->
 <style>
   :root { --ink: #2b1d14; --accent: #c9733b; --cream: #f7efe6; --paper: #fffaf4; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); }
   * { box-sizing: border-box; }
@@ -34,6 +35,12 @@
   .card h3 { margin: 0 0 6px; font-size: 16px; }
   .quote { font: italic 20px/1.5 Georgia, serif; padding: 26px; border-radius: 20px; background: var(--cream); margin: 0; }
   footer { padding: 30px 20px 110px; background: #3d2a1e; color: #e9dccd; font-size: 14px; line-height: 1.8; }
+  .order-form { display: grid; gap: 12px; max-width: 440px; }
+  .order-form label { display: grid; gap: 6px; font-size: 14px; }
+  .order-form input:not([type]), .order-form select { font: inherit; padding: 10px 12px; border: 1px solid #d9c7b6; border-radius: 10px; background: #fff; }
+  .order-form .check-line { display: flex; align-items: center; gap: 8px; }
+  #order-more { justify-self: start; padding: 10px 16px; border: 0; border-radius: 999px; background: #efe1cf; color: var(--ink); font: 600 14px system-ui, sans-serif; }
+  #pickup { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--cream); }
   .order { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: var(--accent); color: #fff; font-weight: 700; }
   .order span { font-weight: 400; opacity: .9; font-size: 14px; }
   @media (min-width: 700px) {
@@ -79,6 +86,15 @@
     <div class="card"><h3>Open early</h3>Doors open at 6:30 on weekdays and 7:30 on weekends.</div>
     <div class="card"><h3>Local pastries</h3>Baked each morning by a bakery two streets away.</div>
   </div>
+</section>
+<section id="order-ahead"><h2>Order ahead</h2>
+  <form class="card order-form" onsubmit="return false">
+    <label>Name <input id="order-name" autocomplete="off" placeholder="Your name"></label>
+    <label>Size <select id="order-size"><option>Small</option><option selected>Regular</option><option>Large</option></select></label>
+    <label class="check-line"><input type="checkbox" id="order-oat"> Oat milk</label>
+    <button type="button" id="order-more" aria-expanded="false" onclick="const p = document.getElementById('pickup'); p.hidden = !p.hidden; this.setAttribute('aria-expanded', String(!p.hidden))">Show pickup times</button>
+    <p id="pickup" hidden>Ready in 8 minutes at the side bar.</p>
+  </form>
 </section>
 <section id="story"><h2>Our story</h2><p class="quote">“We started with one grinder and a folding table. Ten years later, the table is still here.”</p></section>
 <footer>Lumen Coffee is a fictional brand used to demonstrate Viewport.<br>12 Harbor Lane · Open daily · hello@example.com</footer>
