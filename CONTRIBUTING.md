@@ -7,6 +7,7 @@ Thanks for helping keep Viewport free. Kontribusi dalam bahasa Indonesia juga di
 1. Load the `extension` folder with **Load unpacked** on `chrome://extensions`, with Developer mode on.
 2. After you change a file, click **Reload** on the extension card, then reopen the studio.
 3. Run `npm test` and `npm run check` (Node.js 22 or newer, no install step).
+4. For browser tests: `npm install`, `npx playwright install chromium`, then `npm run e2e`. They load a copy of the extension with host access pre-granted, because automation cannot click Chrome's permission prompt. `VIEWPORT_E2E_CHANNEL=msedge` uses an installed Edge instead.
 
 ## Ground rules
 
@@ -25,7 +26,7 @@ These keep the project small, safe and trustworthy. A pull request that breaks o
 
 ## Manual checklist
 
-Unit tests use mocked Chrome APIs, so please also check these in a real browser. [`docs/demo.html`](docs/demo.html) covers the tricky cases; serve the `docs` folder (for example `python -m http.server 8000`) and open `http://localhost:8000/demo.html`.
+The browser tests cover most of this, but please also check these by hand, especially the permission prompt and the global shortcut, which automation cannot reach. [`docs/demo.html`](docs/demo.html) covers the tricky cases; serve the `docs` folder (for example `python -m http.server 8000`) and open `http://localhost:8000/demo.html`.
 
 1. Click the icon on a website. The same tab becomes the studio and no debugging banner appears.
 2. On a fresh install, **Allow website access** shows Chrome's permission dialog and the site loads after you approve it.
@@ -38,9 +39,11 @@ Unit tests use mocked Chrome APIs, so please also check these in a real browser.
 9. With **Also sync clicks and typing** on, typing a name, changing the size and ticking **Oat milk** in the demo's order form updates the other devices. **Show pickup times** opens in all of them.
 10. `?` lists the shortcuts; `R`, `0`, `F`, `T` and `1`–`4` work after clicking outside the phone. `Alt+Shift+V` toggles Viewport from a normal tab.
 11. The header's theme button cycles auto, light and dark, and a forced theme survives a reload.
-12. **User agent → iPhone** reloads the devices; a "what is my user agent" page shows iPhone Safari inside the Studio and your normal browser in a normal tab.
-13. Reload the studio. Your devices, zoom and saved sizes are still there.
-14. Clicking the icon again returns the tab to the last page. That site still refuses to be framed in a normal tab.
+12. Drag on the demo page scrolls it like a finger; dragging the drinks row moves only the row; a drag that starts on a link does not open it.
+13. **Record video** asks to share the tab; the devices fill the window with a floating clock, and **Stop** downloads a sharp video of just the devices. Open it in your normal video player too.
+14. **User agent → iPhone** reloads the devices; a "what is my user agent" page shows iPhone Safari inside the Studio and your normal browser in a normal tab.
+15. Reload the studio. Your devices, zoom and saved sizes are still there.
+16. Clicking the icon again returns the tab to the last page. That site still refuses to be framed in a normal tab.
 
 ## Issues and pull requests
 

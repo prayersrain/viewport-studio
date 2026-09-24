@@ -4,9 +4,7 @@ This is the planned work, not a promise. Pick an item, open an issue to discuss 
 
 ## Next
 
-- **Drag to scroll.** Let a mouse drag scroll a device like a finger, without faking touch support.
-- **Screen recording.** Record a device to video for bug reports, with `tabCapture` as an optional permission.
-- **End-to-end tests in CI.** Use Playwright with Chromium or Chrome for Testing. Branded Chrome ignores `--load-extension`.
+- **1.0 review.** A full pass over code, docs and accessibility before calling it stable.
 
 ## Later
 
@@ -21,6 +19,8 @@ This is the planned work, not a promise. Pick an item, open an issue to discuss 
 
 ## Done
 
+- 0.9.0: video recording cropped to the devices, without new permissions.
+- 0.8.0: drag to scroll, browser tests in the repo and in CI.
 - 0.7.0: mobile user agent (header, client hints and page scripts), full-press click replay.
 - 0.6.0: keyboard shortcuts and a global toggle, dark theme, experimental click and typing sync, animated README demo.
 - 0.5.0: full-page screenshots, inner scroll sync, per-device unlink, demo site and README images.

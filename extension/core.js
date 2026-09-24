@@ -58,7 +58,7 @@ export function cleanPrefs(value, saved = []) {
   });
   if (!devices.length) devices.push({ key: 'iphone', ...viewport(PRESETS.iphone), linked: true });
   const focus = Number.isInteger(value?.focus) && value.focus >= 0 && value.focus < devices.length ? value.focus : 0;
-  return { devices, focus, agent: AGENTS.includes(value?.agent) ? value.agent : 'desktop', frame: value?.frame !== false, sync: value?.sync !== false, syncInput: value?.syncInput === true, zoom: ZOOM_STEPS.includes(value?.zoom) ? value.zoom : 'fit', shot: value?.shot === 'full' ? 'full' : 'screen' };
+  return { devices, focus, agent: AGENTS.includes(value?.agent) ? value.agent : 'desktop', frame: value?.frame !== false, sync: value?.sync !== false, syncInput: value?.syncInput === true, drag: value?.drag !== false, zoom: ZOOM_STEPS.includes(value?.zoom) ? value.zoom : 'fit', shot: value?.shot === 'full' ? 'full' : 'screen' };
 }
 
 // Outer size of a device in CSS px: viewport plus bezel and the status/browser bars.
@@ -97,6 +97,16 @@ export const MAX_CANVAS = 32000;
 export function strips(total, height) {
   const count = Math.max(1, Math.ceil(total / height));
   return Array.from({ length: count }, (_, index) => ({ y: index * height, first: index === 0, last: index === count - 1 }));
+}
+
+// Recordings: MP4 plays everywhere a bug report goes; WebM is the fallback every Chrome encodes.
+export const RECORDING_TYPES = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp8', 'video/webm'];
+export const recordingType = supported => RECORDING_TYPES.find(type => supported(type)) ?? '';
+export const recordingExtension = type => type.startsWith('video/mp4') ? 'mp4' : 'webm';
+export const MAX_RECORDING_MS = 5 * 60 * 1000;
+export function clock(ms) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 // Only sub-frames inside one Studio tab lose their anti-framing headers.

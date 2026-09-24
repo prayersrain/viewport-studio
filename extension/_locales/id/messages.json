@@ -105,5 +105,18 @@
   "agentLabel": { "message": "User agent" },
   "agentDesktop": { "message": "Desktop" },
   "agentNote": { "message": "Server dan script halaman melihat browser ini. Berlaku untuk semua device di tab ini, dan halaman dimuat ulang." },
-  "kbAgent": { "message": "User agent: desktop, iPhone, atau Android" }
+  "kbAgent": { "message": "User agent: desktop, iPhone, atau Android" },
+  "dragLabel": { "message": "Seret untuk scroll, seperti jari" },
+  "kbDrag": { "message": "Seret untuk scroll: aktif atau mati" },
+  "recordTitle": { "message": "Video" },
+  "record": { "message": "Rekam video" },
+  "recordStop": { "message": "Berhenti · $1" },
+  "recordNote": { "message": "Chrome meminta izin berbagi tab ini setiap kali. Video dipotong ke device; pointer mouse tidak ikut terekam." },
+  "recordSaved": { "message": "Video tersimpan: $1" },
+  "recordCancelled": { "message": "Rekaman dibatalkan." },
+  "errorRecordEmpty": { "message": "Rekamannya terlalu singkat. Rekam setidaknya beberapa detik." },
+  "errorRecordThisTab": { "message": "Pilih tab Viewport ini di dialog berbagi Chrome." },
+  "errorRecordUnsupported": { "message": "Browser ini tidak bisa merekam video." },
+  "kbRecord": { "message": "Mulai atau hentikan rekaman" },
+  "recordStopShort": { "message": "Berhenti" }
 }

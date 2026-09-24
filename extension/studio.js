@@ -1,4 +1,4 @@
-import { PRESETS, MAX_DEVICES, MAX_CANVAS, ACCESS, AGENTS, viewport, webUrl, presetFor, deviceBox, fitScale, stepZoom, cropRect, strips, cleanPrefs, cleanSaved } from './core.js';
+import { PRESETS, MAX_DEVICES, MAX_CANVAS, MAX_RECORDING_MS, ACCESS, AGENTS, recordingType, recordingExtension, clock, viewport, webUrl, presetFor, deviceBox, fitScale, stepZoom, cropRect, strips, cleanPrefs, cleanSaved } from './core.js';
 import { t, localize } from './i18n.js';
 import { observePreviewWidth } from './layout.js';
 const $ = selector => document.querySelector(selector);
@@ -6,7 +6,7 @@ const GAP = 28; // screen px between devices; must match .phone-space gap
 const GROUPS = { phone: 'groupPhone', tablet: 'groupTablet', desktop: 'groupDesktop', saved: 'groupSaved' };
 const params = new URLSearchParams(location.search);
 // Device layout lives in storage.local (survives restarts); the page URL lives in the background session.
-const state = { focus: 0, frame: true, sync: true, syncInput: false, zoom: 'fit', shot: 'screen', agent: 'desktop' };
+const state = { focus: 0, frame: true, sync: true, syncInput: false, drag: true, zoom: 'fit', shot: 'screen', agent: 'desktop' };
 let slots = [], saved = [], ready = false, tabId, scale = 1, siteUrl = '', capturing = false, cutShort = false, slotCount = 0;
 
 localize();
@@ -26,7 +26,7 @@ const frameOf = slot => describe(slot.key).frame || 'generic';
 // A saved device keeps its name when its size is typed in again.
 const keyFor = size => presetFor(size) !== 'custom' ? presetFor(size) : saved.find(d => (d.width === size.width && d.height === size.height) || (d.width === size.height && d.height === size.width))?.id || 'custom';
 function storePrefs() {
-  const prefs = { devices: slots.map(({ key, size, linked }) => ({ key, ...size, linked })), focus: state.focus, frame: state.frame, sync: state.sync, syncInput: state.syncInput, zoom: state.zoom, shot: state.shot, agent: state.agent };
+  const prefs = { devices: slots.map(({ key, size, linked }) => ({ key, ...size, linked })), focus: state.focus, frame: state.frame, sync: state.sync, syncInput: state.syncInput, drag: state.drag, zoom: state.zoom, shot: state.shot, agent: state.agent };
   globalThis.chrome?.storage?.local.set({ prefs }).catch(() => {});
 }
 
@@ -40,6 +40,10 @@ function createSlot({ key, width, height, linked = true }) {
   slot.iframe.name = frameName(slot);
   wireFrame(slot);
   element.addEventListener('pointerdown', () => focusSlot(slot));
+  // A new device appears at its final size; animating from the stylesheet default would
+  // send the website a burst of resizes through widths it was never set to.
+  element.classList.add('fresh');
+  requestAnimationFrame(() => requestAnimationFrame(() => element.classList.remove('fresh')));
   element.querySelector('.slot-close').onclick = event => { event.stopPropagation(); removeSlot(slot); };
   // An unlinked device keeps its own page and scroll position.
   element.querySelector('.slot-link').onclick = () => { slot.linked = !slot.linked; geometry(); storePrefs(); syncFrames(); };
@@ -72,7 +76,7 @@ function focusSlot(slot) {
 function addSlot(device) {
   if (slots.length >= MAX_DEVICES) return status(t('maxDevices'), true);
   const url = focused()?.url || siteUrl, slot = createSlot(device);
-  slots.push(slot); $('#stage').append(slot.element);
+  slots.push(slot); $('#stage-row').append(slot.element);
   state.focus = slots.length - 1; geometry(); storePrefs(); syncFrames();
   if (ready && url) loadSlot(slot, url);
   else overlay(slot, $('#grant').hidden ? t('overlayEmpty') : t('overlayGrant'));
@@ -99,6 +103,8 @@ function resizeFocused(next, key) {
 function geometry(bounds) {
   // The resize observer can fire before init() has built the devices from storage.
   if (!slots.length) return;
+  // While recording, devices fill the window and stay that size.
+  if (!bounds && recordLayout) bounds = recordingBounds();
   const stage = $('#stage'), multi = slots.length > 1;
   stage.classList.toggle('multi', multi);
   const framed = state.frame && !bounds?.plain;
@@ -239,7 +245,8 @@ function reported(slot, value) {
 }
 const post = (slot, message) => { try { slot.port?.postMessage(message); } catch { slot.port = null; } };
 const shares = slot => state.sync && slot.linked && slots.filter(other => other.linked).length > 1;
-const syncMessage = slot => ({ type: 'sync', scroll: shares(slot), input: shares(slot) && state.syncInput });
+// Per-device settings frame.js needs: what to share, and whether a mouse drag scrolls like a finger.
+const syncMessage = slot => ({ type: 'sync', scroll: shares(slot), input: shares(slot) && state.syncInput, drag: state.drag });
 function syncFrames() { for (const slot of slots) post(slot, syncMessage(slot)); }
 // Request/reply over a device's port (measure and scroll the page for full-page screenshots).
 const pending = new Map();
@@ -351,10 +358,10 @@ async function capture() {
     capturing = false; geometry();
   }
 }
-function shotName() {
-  const d = new Date(), p = n => String(n).padStart(2, '0'), slot = focused(), full = state.shot === 'full';
+function shotName({ extension = 'png', full = state.shot === 'full' } = {}) {
+  const d = new Date(), p = n => String(n).padStart(2, '0'), slot = focused();
   const what = slots.length > 1 && !full ? `${slots.length}-devices` : `${describe(slot.key).name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${slot.size.width}x${slot.size.height}${full ? '-full' : ''}`;
-  return `viewport-${what}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
+  return `viewport-${what}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${extension}`;
 }
 const shotDone = message => status(cutShort ? `${message} ${t('fullPageCut')}` : message);
 async function saveShot() {
@@ -376,6 +383,104 @@ function showShot() {
 }
 function setShot(mode) { state.shot = mode; showShot(); storePrefs(); }
 $('#shot-mode').onclick = e => { const b = e.target.closest('button'); if (b) setShot(b.dataset.mode); };
+
+// ---- Recording ----
+// The tab records itself (Chrome asks every time) and Region Capture crops it to the devices,
+// which fill the window meanwhile so the video is sharp. Tab capture only sends a frame when
+// something changes, so each frame is redrawn onto a canvas at a steady 30 fps: players get
+// constant timing, and the encoder keeps sharpening still content instead of freezing its
+// first rough frame.
+let recording = null, recordLayout = false;
+const recordTarget = () => slots.length > 1 ? $('#stage-row') : focused().body;
+// Leaves room for the floating recording bar and for Chrome's sharing bar, which shortens the page.
+const recordingBounds = () => ({ width: innerWidth - 48, height: innerHeight - 150 });
+function setRecordLayout(on) {
+  recordLayout = on;
+  document.body.classList.toggle('recording-mode', on);
+  $('#rec-bar').hidden = !on;
+  geometry();
+}
+const even = n => Math.max(2, Math.floor(n / 2) * 2);
+async function startRecording() {
+  if (!ready) throw Error(t('errorGrantFirst'));
+  const type = recordingType(candidate => MediaRecorder.isTypeSupported(candidate));
+  if (!type) throw Error(t('errorRecordUnsupported'));
+  // Devices take their recording size first: the capture must not be larger than what it crops.
+  // Asking for more makes Chrome re-render the tab at a higher scale, and framed sites then
+  // lay out for a viewport wider than their device.
+  setRecordLayout(true);
+  const target = recordTarget().getBoundingClientRect();
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ audio: false, preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude',
+      video: { frameRate: 30, width: { max: Math.round(target.width * devicePixelRatio) }, height: { max: Math.round(target.height * devicePixelRatio) } } });
+  } catch (e) { setRecordLayout(false); throw e; }
+  const [track] = stream.getVideoTracks();
+  try {
+    await frames();
+    // Cropping only works when the capture is this very tab.
+    try { await track.cropTo(await CropTarget.fromElement(recordTarget())); } catch { throw Error(t('errorRecordThisTab')); }
+    const source = Object.assign(document.createElement('video'), { muted: true, srcObject: new MediaStream([track]) });
+    await source.play();
+    for (let i = 0; i < 40 && !source.videoWidth; i++) await pause(50);
+    await frames();
+    const canvas = Object.assign(document.createElement('canvas'), { width: even(source.videoWidth), height: even(source.videoHeight) });
+    const context = canvas.getContext('2d', { alpha: false }), backdrop = getComputedStyle(document.body).backgroundColor;
+    const bits = Math.min(16e6, Math.max(4e6, canvas.width * canvas.height * 30 * 0.25));
+    const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: type, videoBitsPerSecond: bits, videoKeyFrameIntervalDuration: 2000 }), chunks = [];
+    recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+    recording = { recorder, stream, source, type, chunks, started: Date.now(), name: shotName({ extension: recordingExtension(type), full: false }) };
+    const paint = () => {
+      if (!recording) return;
+      // Keep the picture's shape if a device changes size mid-recording.
+      const fit = Math.min(canvas.width / (source.videoWidth || canvas.width), canvas.height / (source.videoHeight || canvas.height));
+      const width = (source.videoWidth || canvas.width) * fit, height = (source.videoHeight || canvas.height) * fit;
+      context.fillStyle = backdrop; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(source, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+      recording.frame = requestAnimationFrame(paint);
+    };
+    paint();
+    recording.timer = setInterval(() => { if (Date.now() - recording.started > MAX_RECORDING_MS) stopRecording(); else showRecording(); }, 500);
+    // Chrome's own "Stop sharing" button ends the track.
+    track.addEventListener('ended', stopRecording);
+    recorder.start(1000);
+    showRecording();
+  } catch (e) {
+    stream.getTracks().forEach(each => each.stop());
+    recording = null; setRecordLayout(false);
+    throw e;
+  }
+}
+async function stopRecording() {
+  const current = recording;
+  if (!current) return;
+  recording = null; clearInterval(current.timer); cancelAnimationFrame(current.frame);
+  await new Promise(resolve => { if (current.recorder.state === 'inactive') return resolve(); current.recorder.onstop = resolve; current.recorder.stop(); });
+  current.stream.getTracks().forEach(track => track.stop());
+  current.recorder.stream.getTracks().forEach(track => track.stop());
+  current.source.srcObject = null;
+  setRecordLayout(false); showRecording();
+  const blob = new Blob(current.chunks, { type: current.type });
+  if (!blob.size) return status(t('errorRecordEmpty'), true);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob); link.download = current.name; link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+  status(t('recordSaved', current.name));
+}
+function showRecording() {
+  const time = recording ? clock(Date.now() - recording.started) : '00:00';
+  $('#record').classList.toggle('recording', !!recording);
+  $('#record-label').textContent = recording ? t('recordStop', time) : t('record');
+  $('#rec-clock').textContent = time;
+}
+function toggleRecording() {
+  if (recording) return stopRecording();
+  if (recordLayout) return;
+  // Starting must stay inside the click or key press: Chrome requires it for the sharing prompt.
+  startRecording().catch(e => e.name === 'NotAllowedError' ? status(t('recordCancelled')) : error(e));
+}
+$('#rec-stop').onclick = stopRecording;
+$('#record').onclick = toggleRecording;
 
 // ---- Controls ----
 function rotate() { const { width, height } = focused().size; resizeFocused({ width: height, height: width }, focused().key); }
@@ -402,6 +507,8 @@ async function setAgent(agent) {
 }
 $('#agent-segment').onclick = e => { const b = e.target.closest('button'); if (b) setAgent(b.dataset.agent); };
 $('#sync').onchange = () => { state.sync = $('#sync').checked; syncFrames(); geometry(); storePrefs(); };
+function setDrag(on) { state.drag = on; $('#drag').checked = on; syncFrames(); storePrefs(); }
+$('#drag').onchange = () => setDrag($('#drag').checked);
 $('#sync-input').onchange = () => { state.syncInput = $('#sync-input').checked; syncFrames(); storePrefs(); };
 function navigate() {
   try { if (!ready) throw Error(t('errorGrantFirst')); loadAll(webUrl($('.address input').value)); status(t('loading')); } catch (e) { error(e); }
@@ -415,7 +522,7 @@ $('#grant').onclick = async () => {
 };
 observePreviewWidth($('.canvas'), () => geometry());
 let resizeQueued = false;
-addEventListener('resize', () => { if (resizeQueued) return; resizeQueued = true; requestAnimationFrame(() => { resizeQueued = false; if (!capturing) geometry(); }); });
+addEventListener('resize', () => { if (resizeQueued) return; resizeQueued = true; requestAnimationFrame(() => { resizeQueued = false; if (!capturing && !recordLayout) geometry(); }); });
 
 // ---- Theme ----
 // Kept in localStorage so theme.js can apply it before the first paint.
@@ -442,7 +549,8 @@ const shortcuts = {
   '?': help, '/': () => { $('.address input').focus(); $('.address input').select(); },
   r: rotate, '+': () => setZoom(stepZoom(scale, 1)), '=': () => setZoom(stepZoom(scale, 1)), '-': () => setZoom(stepZoom(scale, -1)),
   0: () => setZoom(state.zoom === 'fit' ? 1 : 'fit'), f: () => setFrame(!state.frame), l: toggleLink,
-  s: saveShot, c: copyShot, p: () => setShot(state.shot === 'full' ? 'screen' : 'full'), t: cycleTheme,
+  s: saveShot, c: copyShot, p: () => setShot(state.shot === 'full' ? 'screen' : 'full'), v: () => toggleRecording(), t: cycleTheme,
+  d: () => setDrag(!state.drag),
   u: () => setAgent(AGENTS[(AGENTS.indexOf(state.agent) + 1) % AGENTS.length]),
 };
 addEventListener('keydown', event => {
@@ -480,10 +588,10 @@ async function init() {
   const stored = (await globalThis.chrome?.storage?.local.get(['prefs', 'savedDevices']).catch(() => null)) || {};
   saved = cleanSaved(stored.savedDevices);
   const prefs = cleanPrefs(stored.prefs, saved);
-  Object.assign(state, { focus: prefs.focus, frame: prefs.frame, sync: prefs.sync, syncInput: prefs.syncInput, zoom: prefs.zoom, shot: prefs.shot, agent: prefs.agent });
+  Object.assign(state, { focus: prefs.focus, frame: prefs.frame, sync: prefs.sync, syncInput: prefs.syncInput, drag: prefs.drag, zoom: prefs.zoom, shot: prefs.shot, agent: prefs.agent });
   slots = prefs.devices.map(createSlot);
-  $('#stage').append(...slots.map(slot => slot.element));
-  $('#sync').checked = state.sync; $('#sync-input').checked = state.syncInput; showFrame(); showShot(); showTheme(); showAgent(); renderDevices(); geometry();
+  $('#stage-row').append(...slots.map(slot => slot.element));
+  $('#sync').checked = state.sync; $('#sync-input').checked = state.syncInput; $('#drag').checked = state.drag; showFrame(); showShot(); showTheme(); showAgent(); renderDevices(); geometry();
   await start();
 }
 init().catch(e => { for (const slot of slots) overlay(slot, e.message); error(e); });

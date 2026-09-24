@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.0
+
+- Video recording (shortcut `V`): the tab records itself through Chrome's share-this-tab prompt, and Region Capture crops the video to the selected device, or to the row of devices. MP4 when Chrome can encode it, WebM otherwise. No new permission.
+- While recording, devices fill the window and hold that size, with a floating clock and Stop. Frames are redrawn onto a canvas at a steady 30 fps, so players get constant timing and still content keeps getting sharper instead of staying blocky. Recordings stop after five minutes.
+- The capture asks for no more pixels than it crops. Asking for more made Chrome re-render the tab at a higher scale, and framed sites then laid out wider than their device (content cut off at the right).
+- Browser tests cover recording: the site keeps its device width while recording, and the downloaded video decodes at the enlarged size and the device's shape.
+
+## 0.8.0
+
+- Drag to scroll (on by default, shortcut `D`): a mouse drag moves the nearest scroller in its direction like a finger, glides on release, pauses scroll snapping while dragging, and drops the click that ends a drag. Form fields are left alone, and a release outside the device ends the drag.
+- Browser tests in the repo (`npm run e2e`): the real extension in Chromium with real mouse and keyboard input, also run in CI.
+- Fixed: a newly added device animated from the stylesheet's default width, sending the website resizes through sizes it was never set to.
+
 ## 0.7.0
 
 - Mobile user agent: Desktop, iPhone or Android for the whole Studio tab (shortcut `U`). A session rule sets the header and client hints; `agent.js` (page world) sets `navigator.userAgent`, `platform`, `vendor` and `userAgentData`. The choice survives reloads.

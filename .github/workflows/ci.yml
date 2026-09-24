@@ -19,3 +19,14 @@ jobs:
       - run: npm run check
       - name: Manifest and locales are valid JSON
         run: node -e "for (const f of ['manifest.json','_locales/en/messages.json','_locales/id/messages.json']) JSON.parse(require('fs').readFileSync('extension/' + f, 'utf8'))"
+  e2e:
+    # The real extension in Playwright's Chromium (new headless loads extensions).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e

@@ -41,6 +41,7 @@ function run(ancestorOrigins, { href = 'https://site.example/', name = 'viewport
     requestAnimationFrame: fn => manualFrames ? frames.push(fn) : setTimeout(fn, 0),
     performance: { now: () => clock.now },
     scrollTo(options) { context.scrollY = Math.min(options.top, 2000); context.scrolledTo = options; },
+    addEventListener: () => {}, setTimeout, cancelAnimationFrame: () => {},
   };
   context.document.documentElement.append = node => appended.push(node);
   context.window = context;
@@ -171,6 +172,7 @@ function runForm() {
     MouseEvent: class { constructor(type, init) { Object.assign(this, init, { type }); } }, PointerEvent: class { constructor(type, init) { Object.assign(this, init, { type }); } },
     chrome: { runtime: { getURL: path => 'chrome-extension://viewport/' + path, connect: () => port } },
     setInterval: () => 1, clearInterval: () => {}, requestAnimationFrame: () => {}, performance: { now: () => 0 }, scrollTo() {},
+    addEventListener: () => {}, setTimeout, cancelAnimationFrame: () => {},
   };
   context.window = context;
   vm.createContext(context);
@@ -220,4 +222,96 @@ test('replayed clicks and typing reach the matching element through framework-vi
   assert.deepEqual([...field.events], ['input', 'change']);
   port.onMessage.fire({ type: 'input', path: '#p', value: 'hunter2' });
   assert.equal(secret._value, undefined, 'a password field is never filled from another device');
+});
+
+// ---- Drag to scroll ----
+function runDrag() {
+  const docListeners = {}, winListeners = {}, frames = [], later = [];
+  const port = { onMessage: event(), onDisconnect: event(), postMessage: () => {} };
+  const clock = { now: 1000 };
+  const context = vm.createContext({
+    location: { href: 'https://site.example/', ancestorOrigins: ['chrome-extension://viewport'] }, name: 'viewport-a', innerHeight: 800, scrollX: 0, scrollY: 0,
+    CSS: { escape: v => v }, chrome: { runtime: { getURL: path => 'chrome-extension://viewport/' + path, connect: () => port } },
+    setInterval: () => 1, clearInterval: () => {}, setTimeout: fn => later.push(fn),
+    requestAnimationFrame: fn => frames.push(fn), cancelAnimationFrame: () => {}, performance: { now: () => clock.now },
+    getSelection: () => ({ removeAllRanges() {} }),
+    addEventListener: (type, fn) => { winListeners[type] = fn; },
+  });
+  context.window = context;
+  const dom = vm.runInContext(`
+    class Element { constructor(tag, props = {}) { Object.assign(this, { tagName: tag, parentElement: null, style: { scrollSnapType: '' }, scrolls: [], scrollHeight: 0, clientHeight: 0, scrollWidth: 0, clientWidth: 0, overflowX: 'visible', overflowY: 'visible' }, props); }
+      closest(selector) { return selector.includes('input') && this.tagName === 'INPUT' ? this : null; }
+      scrollBy(options) { this.scrolls.push(options); } }
+    ({ Element })`, context);
+  Object.assign(context, dom, { getComputedStyle: node => ({ overflowX: node.overflowX, overflowY: node.overflowY }) });
+  const html = new dom.Element('HTML', { dataset: {}, setPointerCapture() {}, append() {} }), body = new dom.Element('BODY', { parentElement: html });
+  const page = new dom.Element('HTML-SCROLLER');
+  context.document = { head: null, documentElement: html, body, scrollingElement: page, createElement: () => ({}),
+    addEventListener: (type, fn) => { (docListeners[type] ||= []).push(fn); }, querySelector: () => null };
+  vm.runInContext(source, context);
+  const fire = (type, props) => (docListeners[type] || []).forEach(fn => fn({ isTrusted: true, pointerType: 'mouse', button: 0, buttons: 1, pointerId: 1, preventDefault() {}, ...props }));
+  return { dom, body, html, page, port, fire, frames, later, clock, winListeners };
+}
+
+test('a mouse drag scrolls the page like a finger, glides, and never clicks', () => {
+  const { dom, body, html, page, port, fire, frames, later, clock, winListeners } = runDrag();
+  const text = new dom.Element('P', { parentElement: body });
+  fire('pointerdown', { target: text, clientX: 100, clientY: 500 }); fire('pointermove', { clientX: 100, clientY: 400 });
+  assert.equal(page.scrolls.length, 0, 'off until Studio turns it on');
+  port.onMessage.fire({ type: 'sync', drag: true });
+  fire('pointerdown', { target: text, clientX: 100, clientY: 500 });
+  fire('pointermove', { clientX: 101, clientY: 497 });
+  assert.equal(page.scrolls.length, 0, 'tiny moves stay clicks');
+  fire('pointermove', { clientX: 101, clientY: 480 }); clock.now += 16;
+  fire('pointermove', { clientX: 101, clientY: 460 }); clock.now += 16;
+  assert.deepEqual([...page.scrolls.map(s => s.top)], [20, 20], 'content follows the pointer');
+  assert.equal(page.scrolls[0].behavior, 'instant');
+  assert.equal(html.dataset.viewportDrag, '', 'selection and cursor locked while dragging');
+  fire('pointerup', {});
+  assert.equal(html.dataset.viewportDrag, undefined);
+  let blocked = false, stopped = false;
+  winListeners.click({ preventDefault() { blocked = true; }, stopPropagation() { stopped = true; } });
+  assert.ok(blocked && stopped, 'the click at the end of a drag is dropped before any page or sync listener');
+  const before = page.scrolls.length;
+  for (let i = 0; i < 200 && frames.length; i++) frames.shift()();
+  assert.ok(page.scrolls.length > before + 5, 'a fling keeps gliding');
+  assert.ok(Math.abs(page.scrolls.at(-1).top) < Math.abs(page.scrolls[before].top), 'and slows down');
+  later.forEach(fn => fn());
+  let clicked = false;
+  winListeners.click({ preventDefault() { clicked = true; }, stopPropagation() {} });
+  assert.equal(clicked, false, 'later clicks are untouched');
+});
+
+test('drag picks the inner scroller in its direction, pauses snapping, and leaves form fields alone', () => {
+  const { dom, body, page, port, fire, frames } = runDrag();
+  port.onMessage.fire({ type: 'sync', drag: true });
+  const rail = new dom.Element('DIV', { parentElement: body, overflowX: 'auto', scrollWidth: 1200, clientWidth: 400 }), card = new dom.Element('DIV', { parentElement: rail });
+  fire('pointerdown', { target: card, clientX: 300, clientY: 200 });
+  fire('pointermove', { clientX: 280, clientY: 202 });
+  assert.equal(rail.style.scrollSnapType, 'none', 'snap points would fight each step');
+  assert.deepEqual([...rail.scrolls.map(s => s.left)], [20]);
+  assert.equal(page.scrolls.length, 0, 'the page stays put during a sideways drag');
+  fire('pointercancel', {});
+  while (frames.length) frames.shift()();
+  assert.equal(rail.style.scrollSnapType, '', 'snapping returns when the drag ends');
+  const field = new dom.Element('INPUT', { parentElement: body });
+  fire('pointerdown', { target: field, clientX: 10, clientY: 10 }); fire('pointermove', { clientX: 10, clientY: 60 });
+  fire('pointerdown', { target: card, clientX: 10, clientY: 10, pointerType: 'touch' }); fire('pointermove', { clientX: 10, clientY: 60 });
+  fire('pointerdown', { target: card, clientX: 10, clientY: 10, isTrusted: false }); fire('pointermove', { clientX: 10, clientY: 60 });
+  assert.equal(page.scrolls.length + rail.scrolls.length, 1, 'inputs, touch and synthetic pointers keep their normal behaviour');
+});
+
+test('a drag released outside the device ends on the next move without a pressed button', () => {
+  const { dom, body, html, page, port, fire, frames } = runDrag();
+  port.onMessage.fire({ type: 'sync', drag: true });
+  const text = new dom.Element('P', { parentElement: body });
+  fire('pointerdown', { target: text, clientX: 100, clientY: 500 });
+  fire('pointermove', { clientX: 100, clientY: 470 });
+  assert.equal(page.scrolls.length, 1);
+  // The pointerup happened over Studio, so the page only sees the pointer come back unpressed.
+  fire('pointermove', { clientX: 100, clientY: 300, buttons: 0 });
+  fire('pointermove', { clientX: 100, clientY: 200, buttons: 0 });
+  assert.equal(page.scrolls.length, 1, 'no scrolling without a pressed button');
+  assert.equal(html.dataset.viewportDrag, undefined, 'selection and cursor unlocked');
+  assert.equal(frames.length, 0, 'no glide after a lost release');
 });

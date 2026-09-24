@@ -12,8 +12,10 @@ A free, open-source Chrome extension for previewing websites at phone sizes insi
 - **Instant resize.** Switch presets, set custom sizes and rotate without reloading the page.
 - **Side-by-side comparison.** Show up to 4 devices at once. Navigation and scrolling stay in sync, including carousels and other inner scroll areas. Unlink a device to keep it on its own page.
 - **Screenshots.** Save a PNG or copy it to the clipboard, with or without the device frame. **Full page** captures the whole page from top to bottom and shows sticky headers and fixed bars only once.
+- **Video recording.** Record the devices to MP4 (WebM where MP4 is unavailable) for bug reports. Chrome asks to share the tab each time, and the video is cropped to the devices.
 - **Device library.** Ten phone, tablet and desktop presets, plus custom sizes you name and keep.
 - **Zoom.** Fit everything on screen, or view devices at true size (100%).
+- **Drag to scroll.** A mouse drag scrolls the page or a carousel like a finger, glides on release, and never clicks what it started on. Form fields keep normal mouse behaviour.
 - **Mobile user agent.** Switch the Studio between Desktop, iPhone and Android. Servers and page scripts both see the phone browser.
 - **Keyboard shortcuts.** Press `?` in the studio for the list. `Alt+Shift+V` opens or closes Viewport from any tab.
 - **Dark theme.** Follows your system, or pick light or dark with the button in the header.
@@ -67,6 +69,7 @@ When you pick an iPhone or Android user agent, a session rule sets the `User-Age
 - Inside the preview, Viewport ignores a site's CSP when that CSP contains `frame-ancestors`. Test CSP-related issues in a normal tab.
 - Chrome blocks plain `http://` addresses other than localhost (such as `http://192.168.x.x`) as mixed content. Use `localhost`, `127.0.0.1` or https.
 - A framebusting script that runs after a user click can take over the tab.
+- While recording, the devices fill the window for a sharper video and a floating bar shows the clock and **Stop**. Recordings do not include the mouse pointer and stop by themselves after five minutes.
 - Screenshot resolution depends on your screen. Devices are briefly shown alone at the largest size that fits the window, and the Viewport tab must stay in front until the screenshot is done.
 - Full-page screenshots scroll the page one screen at a time (about 0.6 seconds per screen). Animations that play on scroll can look different from a normal visit, and extremely long pages are cut at 32,000 image pixels.
 - Click and typing sync replays actions by element position in the page, like inner scroll sync. Links are left to navigation sync, and password and file fields are never copied. A replayed click includes the full press (pointer and mouse down/up), but drags, hovers and long presses are not replayed.
@@ -76,7 +79,7 @@ See [ROADMAP.md](ROADMAP.md) for planned features.
 
 ## Development
 
-There is no build step and there are no dependencies. You need Node.js 22 or newer to run the checks.
+There is no build step and the extension has no dependencies. You need Node.js 22 or newer to run the checks; only the browser tests install Playwright.
 
 ```bash
 npm test
@@ -86,7 +89,23 @@ npm test
 npm run check
 ```
 
-The tests cover URL and size validation, session ownership, rule scoping and cleanup, the `frame.js` gate, scroll sync and full-page strips, layout math, stored-preference cleanup, and translation coverage, all against mocked Chrome APIs. They cannot prove that the extension works in a real browser. After changes, reload the extension and run the manual checklist in [CONTRIBUTING.md](CONTRIBUTING.md). [`docs/demo.html`](docs/demo.html) is a fictional site that covers the tricky cases: a sticky header, a horizontal scroller, a phone-only fixed bar and a responsive grid.
+`npm test` covers URL and size validation, session ownership, rule scoping and cleanup, the `frame.js` and `agent.js` gates, scroll, click and drag handling, layout math, stored-preference cleanup and translation coverage, all against mocked Chrome APIs.
+
+The browser tests load the real extension in Chromium and drive it with real mouse and keyboard input: framing, devices side by side, screenshots, video recording, sync, themes and shortcuts, user agents and drag to scroll. They need Playwright:
+
+```bash
+npm install
+```
+
+```bash
+npx playwright install chromium
+```
+
+```bash
+npm run e2e
+```
+
+Set `VIEWPORT_E2E_CHANNEL=msedge` to use an installed Edge instead. Both suites run in CI on every push. After changes, also run the manual checklist in [CONTRIBUTING.md](CONTRIBUTING.md). [`docs/demo.html`](docs/demo.html) is a fictional site that covers the tricky cases: a sticky header, a horizontal scroller, a phone-only fixed bar and a responsive grid.
 
 ## Contributing
 

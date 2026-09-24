@@ -105,5 +105,18 @@
   "agentLabel": { "message": "User agent" },
   "agentDesktop": { "message": "Desktop" },
   "agentNote": { "message": "Servers and page scripts see this browser. It applies to every device in this tab, and pages reload." },
-  "kbAgent": { "message": "User agent: desktop, iPhone or Android" }
+  "kbAgent": { "message": "User agent: desktop, iPhone or Android" },
+  "dragLabel": { "message": "Drag to scroll, like a finger" },
+  "kbDrag": { "message": "Drag to scroll on or off" },
+  "recordTitle": { "message": "Video" },
+  "record": { "message": "Record video" },
+  "recordStop": { "message": "Stop · $1" },
+  "recordNote": { "message": "Chrome asks to share this tab each time. The video is cropped to the devices; the mouse pointer is not recorded." },
+  "recordSaved": { "message": "Video saved: $1" },
+  "recordCancelled": { "message": "Recording cancelled." },
+  "errorRecordEmpty": { "message": "The recording was too short. Record for at least a few seconds." },
+  "errorRecordThisTab": { "message": "Choose this Viewport tab in Chrome's sharing dialog." },
+  "errorRecordUnsupported": { "message": "This browser cannot record video." },
+  "kbRecord": { "message": "Start or stop recording" },
+  "recordStopShort": { "message": "Stop" }
 }

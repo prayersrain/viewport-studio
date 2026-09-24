@@ -76,7 +76,8 @@ test('stored preferences are rebuilt from valid parts only',()=>{
   assert.deepEqual(prefs.devices.map(d=>d.key),['iphone','saved-abc','custom'],'unknown keys (even prototype names) become custom');
   assert.equal(prefs.focus,0);assert.equal(prefs.frame,false);assert.equal(prefs.sync,false);assert.equal(prefs.zoom,'fit');assert.equal(prefs.shot,'full');
   assert.deepEqual(prefs.devices.map(d=>d.linked),[true,false,true],'devices stay linked unless explicitly unlinked');
-  assert.deepEqual(cleanPrefs(undefined),{devices:[{key:'iphone',width:393,height:852,linked:true}],focus:0,agent:'desktop',frame:true,sync:true,syncInput:false,zoom:'fit',shot:'screen'});
+  assert.deepEqual(cleanPrefs(undefined),{devices:[{key:'iphone',width:393,height:852,linked:true}],focus:0,agent:'desktop',frame:true,sync:true,syncInput:false,drag:true,zoom:'fit',shot:'screen'});
+  assert.equal(cleanPrefs({drag:false}).drag,false);
   assert.equal(cleanPrefs({agent:'android'}).agent,'android');assert.equal(cleanPrefs({agent:'ipad'}).agent,'desktop');
   assert.equal(cleanPrefs({syncInput:true}).syncInput,true);assert.equal(cleanPrefs({syncInput:'yes'}).syncInput,false,'click sync is opt-in: only an explicit true enables it');
   assert.equal(cleanPrefs({shot:'evil'}).shot,'screen');
@@ -103,4 +104,14 @@ test('phone user agents and their header rule',()=>{
   const [, , android]=framingRules(7,[1,2,3],'android','153');
   assert.deepEqual(android.action.requestHeaders.slice(1),[{header:'sec-ch-ua-mobile',operation:'set',value:'?1'},{header:'sec-ch-ua-platform',operation:'set',value:'"Android"'}]);
   assert.deepEqual(android.condition,{tabIds:[7],excludedResourceTypes:['main_frame']});
+});
+
+import { recordingType, recordingExtension, clock, RECORDING_TYPES, MAX_RECORDING_MS } from '../extension/core.js';
+test('recordings prefer MP4, fall back to WebM, and show a running clock', () => {
+  assert.equal(recordingType(() => true), 'video/mp4;codecs=avc1');
+  assert.equal(recordingType(type => type.startsWith('video/webm')), 'video/webm;codecs=vp8');
+  assert.equal(recordingType(() => false), '', 'no encoder, no recording');
+  assert.deepEqual(RECORDING_TYPES.map(recordingExtension), ['mp4', 'mp4', 'webm', 'webm']);
+  assert.deepEqual([clock(0), clock(7400), clock(67000), clock(-5)], ['00:00', '00:07', '01:07', '00:00']);
+  assert.equal(MAX_RECORDING_MS, 300000, 'long recordings stop by themselves at five minutes');
 });

@@ -12,8 +12,10 @@ Extension Chrome gratis dan open source untuk melihat website dalam ukuran HP di
 - **Ganti ukuran instan.** Ganti preset, pakai ukuran custom, dan rotasi tanpa reload.
 - **Bandingkan berdampingan.** Hingga 4 perangkat sekaligus. Navigasi dan scroll ikut sinkron, termasuk carousel dan area scroll di dalam halaman. Lepas satu device dari sinkron agar tetap di halamannya sendiri.
 - **Screenshot.** Simpan PNG atau salin ke clipboard, dengan atau tanpa bingkai. **Halaman penuh** menangkap halaman dari atas sampai bawah; header yang menempel dan bar fixed hanya muncul sekali.
+- **Rekam video.** Rekam device ke MP4 (atau WebM kalau MP4 tidak tersedia) untuk laporan bug. Chrome meminta izin berbagi tab setiap kali, dan videonya dipotong ke device.
 - **Daftar device.** Sepuluh preset HP, tablet, dan desktop, plus ukuran custom yang bisa diberi nama dan disimpan.
 - **Zoom.** Muat semua di layar (fit) atau tampilkan ukuran asli (100%).
+- **Seret untuk scroll.** Drag mouse menggeser halaman atau carousel seperti jari, meluncur saat dilepas, dan tidak pernah mengklik tempat awal drag. Kolom form tetap berperilaku mouse biasa.
 - **User agent mobile.** Ganti Studio antara Desktop, iPhone, dan Android. Server dan script halaman sama-sama melihat browser HP.
 - **Shortcut keyboard.** Tekan `?` di studio untuk melihat daftarnya. `Alt+Shift+V` membuka atau menutup Viewport dari tab mana pun.
 - **Tema gelap.** Mengikuti sistem, atau pilih terang/gelap lewat tombol di header.
@@ -59,6 +61,7 @@ Penjelasan tiap izin ada di [README.md](README.md#how-it-works).
 - Di dalam preview, CSP situs diabaikan jika berisi `frame-ancestors`. Masalah yang berkaitan dengan CSP perlu diuji di tab biasa.
 - Chrome memblokir alamat `http://` non-localhost (misalnya `http://192.168.x.x`) sebagai mixed content. Gunakan `localhost`, `127.0.0.1`, atau https.
 - Framebuster yang dijalankan setelah klik pengguna bisa mengambil alih tab.
+- Selama merekam, device memenuhi jendela supaya videonya tajam, dan bar mengambang menampilkan jam serta tombol **Berhenti**. Rekaman tidak menyertakan pointer mouse dan berhenti sendiri setelah lima menit.
 - Resolusi screenshot bergantung pada layar. Perangkat ditampilkan sendirian sesaat dalam ukuran terbesar yang muat di jendela, dan tab Viewport harus tetap di depan sampai screenshot selesai.
 - Screenshot halaman penuh men-scroll halaman satu layar demi satu layar (sekitar 0,6 detik per layar). Animasi yang muncul saat scroll bisa terlihat berbeda, dan halaman yang sangat panjang dipotong di 32.000 piksel gambar.
 - Sinkron klik dan ketikan memutar ulang aksi berdasarkan posisi elemen di halaman, sama seperti sinkron scroll di dalam halaman. Link diserahkan ke sinkron navigasi, dan kolom password maupun file tidak pernah disalin. Klik yang diputar ulang mencakup tekanan penuh (pointer dan mouse down/up), tetapi drag, hover, dan tekan lama tidak diputar ulang.
@@ -68,7 +71,7 @@ Rencana fitur ada di [ROADMAP.md](ROADMAP.md).
 
 ## Pengembangan
 
-Tidak ada build step atau dependency. Pemeriksaan butuh Node.js 22 atau lebih baru.
+Tidak ada build step, dan extension-nya tanpa dependency. Pemeriksaan butuh Node.js 22 atau lebih baru; hanya tes browser yang memasang Playwright (`npm install`, `npx playwright install chromium`, lalu `npm run e2e`).
 
 ```bash
 npm test
