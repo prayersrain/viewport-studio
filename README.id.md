@@ -1,5 +1,10 @@
 # Viewport — Mobile Preview Studio
 
+[![CI](https://github.com/prayersrain/viewport-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/prayersrain/viewport-studio/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/prayersrain/viewport-studio?color=245c45)](https://github.com/prayersrain/viewport-studio/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-245c45)](LICENSE)
+[![Chrome 128+](https://img.shields.io/badge/Chrome-128%2B-245c45?logo=googlechrome&logoColor=white)](#pasang)
+
 Extension Chrome gratis dan open source untuk melihat website dalam ukuran HP di dalam bingkai perangkat. Semuanya berjalan langsung di tab browser, tanpa aplikasi terpisah, akun, server, atau paket berbayar.
 
 [English](README.md)
@@ -30,9 +35,9 @@ Extension Chrome gratis dan open source untuk melihat website dalam ukuran HP di
 
 ## Pasang
 
-1. Clone atau unduh repo ini.
+1. Unduh `viewport-studio-<versi>.zip` dari [rilis terbaru](https://github.com/prayersrain/viewport-studio/releases/latest), lalu ekstrak ke folder yang tidak akan dipindah; Chrome memuatnya dari sana setiap kali. (Atau clone repo ini dan pakai folder `extension`-nya.)
 2. Buka `chrome://extensions`, lalu aktifkan **Developer mode**.
-3. Klik **Load unpacked** dan pilih folder `extension`.
+3. Klik **Load unpacked** dan pilih folder hasil ekstrak.
 
 Butuh Chrome 128 atau lebih baru. Browser berbasis Chromium seperti Edge juga seharusnya jalan.
 

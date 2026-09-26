@@ -1,5 +1,10 @@
 # Viewport — Mobile Preview Studio
 
+[![CI](https://github.com/prayersrain/viewport-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/prayersrain/viewport-studio/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/prayersrain/viewport-studio?color=245c45)](https://github.com/prayersrain/viewport-studio/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-245c45)](LICENSE)
+[![Chrome 128+](https://img.shields.io/badge/Chrome-128%2B-245c45?logo=googlechrome&logoColor=white)](#install)
+
 A free, open-source Chrome extension for previewing websites at phone sizes inside a device frame. It works right in your browser tab, without a separate app, account, server or paid plan.
 
 [Bahasa Indonesia](README.id.md)
@@ -30,9 +35,9 @@ A free, open-source Chrome extension for previewing websites at phone sizes insi
 
 ## Install
 
-1. Clone or download this repository.
+1. Download `viewport-studio-<version>.zip` from the [latest release](https://github.com/prayersrain/viewport-studio/releases/latest) and unzip it somewhere it can stay; Chrome loads it from there every time. (Or clone this repository and use its `extension` folder.)
 2. Open `chrome://extensions` and turn on **Developer mode**.
-3. Click **Load unpacked** and select the `extension` folder.
+3. Click **Load unpacked** and select the unzipped folder.
 
 Requires Chrome 128 or newer. Chromium-based browsers such as Edge should also work.
 
