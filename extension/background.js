@@ -18,6 +18,10 @@ async function frame(tabId, install, agent = 'desktop') {
   const used = new Set(rules.map(rule => rule.id).filter(id => !mine.includes(id))), ids = [];
   for (let id = 1; install && ids.length < ruleCount(agent); id++) if (!used.has(id)) ids.push(id);
   if (mine.length || install) await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: mine, addRules: install ? framingRules(tabId, ids, agent, CHROME_MAJOR) : [] });
+  // ponytail: under load the first request after an update can still leave with the old user agent
+  // (request headers are matched as the request starts; framing rules act later, on the response).
+  // A short settle covers it; confirm with testMatchOutcome if it ever shows up again.
+  if (install && ruleCount(agent) === 3) await new Promise(resolve => setTimeout(resolve, 200));
 }
 const unframe = tabId => frame(tabId, false);
 async function isStudio(tabId) {

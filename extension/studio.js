@@ -131,6 +131,7 @@ function geometry(bounds) {
     link.setAttribute('aria-pressed', String(slot.linked)); link.title = t(slot.linked ? 'linkOn' : 'linkOff'); link.setAttribute('aria-label', link.title);
     const name = slot.element.querySelector('.slot-name');
     name.textContent = name.title = `${describe(slot.key).name} · ${slot.size.width}×${slot.size.height}`;
+    slot.iframe.title = `${t('frameTitle')}: ${name.textContent}`;
   });
   const slot = focused(), landscape = slot.size.width > slot.size.height;
   $('#device-title').textContent = describe(slot.key).name;

@@ -4,21 +4,18 @@ This is the planned work, not a promise. Pick an item, open an issue to discuss 
 
 ## Next
 
-- **1.0 review.** A full pass over code, docs and accessibility before calling it stable.
-
-## Later
-
 - **Agent connection.** Let local coding agents (Claude Code, Codex) inspect or drive the preview through MCP.
 - **Firefox support.**
 - **Rotation animation.**
-- **Per-device user agent.** Chrome's request rules can target a tab but not a single frame, so today every device in the Studio shares one agent.
 
 ## On hold
 
+- **Per-device user agent.** Chrome's request rules can target a tab but not a single frame, so today every device in the Studio shares one agent.
 - **Accurate mode (touch, device pixel ratio via `chrome.debugger`).** Chrome does not allow `debugger` as an optional permission, so shipping it would put the debugger warning on every install, even for people who never use it. It could live in a separate build.
 
 ## Done
 
+- 1.0.0: first stable release after a code, docs and accessibility review.
 - 0.9.0: video recording cropped to the devices, without new permissions.
 - 0.8.0: drag to scroll, browser tests in the repo and in CI.
 - 0.7.0: mobile user agent (header, client hints and page scripts), full-press click replay.

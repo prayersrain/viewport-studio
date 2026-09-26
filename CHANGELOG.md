@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0
+
+First stable release, after a full review of code, docs and accessibility.
+
+- Small grey text in the light theme now meets WCAG AA contrast, and so do the W/H field labels and the unlinked-device icon.
+- Each device frame has its own accessible name (device and size), so screen readers can tell them apart.
+- Fixed: after switching the user agent, the first page load could reach the server with the old agent under heavy load, while page scripts already saw the new one.
+- Removed the unused v0.2 test fixture and the original design mockup (both remain in git history).
+- README images show the current studio.
+
 ## 0.9.0
 
 - Video recording (shortcut `V`): the tab records itself through Chrome's share-this-tab prompt, and Region Capture crops the video to the selected device, or to the row of devices. MP4 when Chrome can encode it, WebM otherwise. No new permission.
